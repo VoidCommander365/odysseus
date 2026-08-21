@@ -25,6 +25,12 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
   let _autoDetectDebounce = null;
   let _autoTitleDebounce = null;
   let _autoSaveDebounce = null;
+  let _emailRichbodySaveDebounce = null;
+  let _emailHeaderManualExpandUntil = 0;
+  let _emailStreamAnimFrame = null;
+  let _emailStreamRenderedBody = '';
+  let _emailStreamTargetBody = '';
+  let _emailSendInFlight = false;
   let _lastAutoSaveErrorAt = 0;
   let _animationInProgress = false;
   let _animationCancel = null;      // function to cancel current animation
@@ -2317,99 +2323,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
       .trim();
   }
 
-  function _emailLocalDraftKey(sourceUid, sourceFolder, inReplyTo) {
-    const uid = String(sourceUid || '').trim();
-    if (!uid) return '';
-    const folder = String(sourceFolder || 'INBOX').trim() || 'INBOX';
-    const msg = String(inReplyTo || '').trim();
-    return _EMAIL_LOCAL_DRAFT_PREFIX + encodeURIComponent(`${folder}|${uid}|${msg}`);
-  }
-
-  function _loadEmailLocalDraft(fields) {
-    const key = _emailLocalDraftKey(fields?.sourceUid, fields?.sourceFolder, fields?.inReplyTo);
-    if (!key) return null;
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return null;
-      const draft = JSON.parse(raw);
-      if (!draft || typeof draft !== 'object') return null;
-      const updatedAt = Number(draft.updatedAt || 0);
-      if (updatedAt && Date.now() - updatedAt > 45 * 24 * 60 * 60 * 1000) {
-        localStorage.removeItem(key);
-        return null;
-      }
-      return draft;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function _emailFieldsWithLocalDraft(fields) {
-    const draft = _loadEmailLocalDraft(fields);
-    if (!draft) return fields;
-    const keepRealField = (draftValue, fieldValue) => {
-      const d = draftValue == null ? '' : String(draftValue);
-      return d.trim() ? d : (fieldValue || '');
-    };
-    return {
-      ...fields,
-      to: keepRealField(draft.to, fields.to),
-      cc: keepRealField(draft.cc, fields.cc),
-      bcc: keepRealField(draft.bcc, fields.bcc),
-      subject: keepRealField(draft.subject, fields.subject),
-      inReplyTo: keepRealField(draft.inReplyTo, fields.inReplyTo),
-      references: keepRealField(draft.references, fields.references),
-      sourceUid: keepRealField(draft.sourceUid, fields.sourceUid),
-      sourceFolder: keepRealField(draft.sourceFolder, fields.sourceFolder),
-      body: _sanitizeOutgoingEmailBody(draft.body ?? fields.body),
-    };
-  }
-
-  function _persistEmailLocalDraftNow() {
-    const doc = activeDocId && docs.get(activeDocId);
-    if (!doc || doc.language !== 'email') return;
-    const sourceUid = document.getElementById('doc-email-source-uid')?.value || '';
-    const sourceFolder = document.getElementById('doc-email-source-folder')?.value || 'INBOX';
-    const inReplyTo = document.getElementById('doc-email-in-reply-to')?.value || '';
-    const key = _emailLocalDraftKey(sourceUid, sourceFolder, inReplyTo);
-    if (!key) return;
-    const rich = document.getElementById('doc-email-richbody');
-    const textarea = document.getElementById('doc-editor-textarea');
-    const body = (rich && rich.style.display !== 'none') ? rich.innerHTML : (textarea?.value || '');
-    const payload = {
-      to: document.getElementById('doc-email-to')?.value || '',
-      cc: document.getElementById('doc-email-cc')?.value || '',
-      bcc: document.getElementById('doc-email-bcc')?.value || '',
-      subject: document.getElementById('doc-email-subject')?.value || '',
-      inReplyTo,
-      references: document.getElementById('doc-email-references')?.value || '',
-      sourceUid,
-      sourceFolder,
-      body,
-      updatedAt: Date.now(),
-    };
-    try { localStorage.setItem(key, JSON.stringify(payload)); } catch (_) {}
-  }
-
-  function _persistEmailLocalDraftSoon() {
-    clearTimeout(_emailLocalDraftDebounce);
-    _emailLocalDraftDebounce = setTimeout(_persistEmailLocalDraftNow, 800);
-  }
-
-  function _clearEmailLocalDraft(sourceUid, sourceFolder, inReplyTo) {
-    const key = _emailLocalDraftKey(sourceUid, sourceFolder, inReplyTo);
-    if (!key) return;
-    try { localStorage.removeItem(key); } catch (_) {}
-  }
-
-  function _clearCurrentEmailLocalDraft() {
-    _clearEmailLocalDraft(
-      document.getElementById('doc-email-source-uid')?.value || '',
-      document.getElementById('doc-email-source-folder')?.value || 'INBOX',
-      document.getElementById('doc-email-in-reply-to')?.value || '',
-    );
-  }
-
   // ── WYSIWYG email body helpers ──
   function _emailPlainTextToHtml(text) {
     const d = document.createElement('div');
@@ -2500,7 +2413,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     }
   }
   function _scheduleEmailRichbodySave() {
-    _persistEmailLocalDraftSoon();
     clearTimeout(_emailRichbodySaveDebounce);
     _emailRichbodySaveDebounce = setTimeout(() => { saveDocument({ silent: true }); }, 2500);
   }
@@ -2750,7 +2662,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     syncHighlighting();
     const rich = _emailRichbodyActive();
     if (rich) rich.innerHTML = _emailBodyToHtml(textarea.value);
-    _persistEmailLocalDraftSoon();
   }
 
   async function _streamEmailBodyText(textarea, value) {
@@ -2765,7 +2676,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
       const next = finalText.slice(0, i + chunk);
       textarea.value = next;
       if (rich) rich.innerHTML = _emailBodyToHtml(next);
-      _persistEmailLocalDraftSoon();
       await new Promise(resolve => requestAnimationFrame(resolve));
     }
     _setEmailBodyText(textarea, finalText);
@@ -2854,7 +2764,7 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     if (_shouldAutoCollapseEmailHeader()) _setEmailHeaderCollapsed(true, { manual: false });
   }
 
-  function _showEmailFields(doc, { applyLocalDraft = true, forceHeaderFields = false } = {}) {
+  function _showEmailFields(doc) {
     const emailHeader = document.getElementById('doc-email-header');
     const emailActions = document.getElementById('doc-email-actions');
     // Show MD toolbar for email too (B, I, etc.)
@@ -2886,13 +2796,12 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     document.getElementById('doc-editor-textarea')?.classList.add('email-mode');
     document.getElementById('doc-editor-code')?.classList.add('email-mode');
     document.getElementById('doc-editor-highlight')?.classList.add('email-mode');
-    let fields = _parseEmailHeader(doc.content || '');
-    if (applyLocalDraft) fields = _emailFieldsWithLocalDraft(fields);
+    const fields = _parseEmailHeader(doc.content || '');
     const preserveEmailHeader = !!(fields.sourceUid || fields.inReplyTo || fields.references);
     const subjectInput = document.getElementById('doc-email-subject');
     const textarea = document.getElementById('doc-editor-textarea');
-    _setEmailHeaderInputValue('doc-email-to', fields.to, { preserveFocused: !forceHeaderFields, preserveNonEmpty: preserveEmailHeader && !forceHeaderFields });
-    _setEmailHeaderInputValue('doc-email-subject', fields.subject, { preserveFocused: !forceHeaderFields, preserveNonEmpty: preserveEmailHeader && !forceHeaderFields });
+    _setEmailHeaderInputValue('doc-email-to', fields.to, { preserveFocused: true, preserveNonEmpty: preserveEmailHeader });
+    _setEmailHeaderInputValue('doc-email-subject', fields.subject, { preserveFocused: true, preserveNonEmpty: preserveEmailHeader });
     _setEmailHeaderCollapsed(!!(doc && doc._emailHeaderCollapsed), { manual: false });
     if (subjectInput && !subjectInput._emailTabBodyBound) {
       subjectInput._emailTabBodyBound = true;
@@ -2903,10 +2812,10 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
         }
       });
     }
-    _setEmailHeaderInputValue('doc-email-in-reply-to', fields.inReplyTo, { preserveFocused: !forceHeaderFields, preserveNonEmpty: preserveEmailHeader && !forceHeaderFields });
-    _setEmailHeaderInputValue('doc-email-references', fields.references, { preserveFocused: !forceHeaderFields, preserveNonEmpty: preserveEmailHeader && !forceHeaderFields });
-    _setEmailHeaderInputValue('doc-email-source-uid', fields.sourceUid || '', { preserveFocused: !forceHeaderFields, preserveNonEmpty: preserveEmailHeader && !forceHeaderFields });
-    _setEmailHeaderInputValue('doc-email-source-folder', fields.sourceFolder || '', { preserveFocused: !forceHeaderFields, preserveNonEmpty: preserveEmailHeader && !forceHeaderFields });
+    _setEmailHeaderInputValue('doc-email-in-reply-to', fields.inReplyTo, { preserveFocused: true, preserveNonEmpty: preserveEmailHeader });
+    _setEmailHeaderInputValue('doc-email-references', fields.references, { preserveFocused: true, preserveNonEmpty: preserveEmailHeader });
+    _setEmailHeaderInputValue('doc-email-source-uid', fields.sourceUid || '', { preserveFocused: true, preserveNonEmpty: preserveEmailHeader });
+    _setEmailHeaderInputValue('doc-email-source-folder', fields.sourceFolder || '', { preserveFocused: true, preserveNonEmpty: preserveEmailHeader });
     // Show/hide unread button only if we have a source UID (came from inbox)
     const unreadBtn = document.getElementById('doc-email-unread-btn');
     if (unreadBtn) unreadBtn.style.display = fields.sourceUid ? '' : 'none';
@@ -3029,8 +2938,8 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     const ccRow = document.getElementById('doc-email-cc-row');
     const bccRow = document.getElementById('doc-email-bcc-row');
     const ccToggle = document.getElementById('doc-email-show-cc');
-    _setEmailHeaderInputValue('doc-email-cc', fields.cc || '', { preserveFocused: !forceHeaderFields, preserveNonEmpty: preserveEmailHeader && !forceHeaderFields });
-    _setEmailHeaderInputValue('doc-email-bcc', fields.bcc || '', { preserveFocused: !forceHeaderFields, preserveNonEmpty: preserveEmailHeader && !forceHeaderFields });
+    _setEmailHeaderInputValue('doc-email-cc', fields.cc || '', { preserveFocused: true, preserveNonEmpty: preserveEmailHeader });
+    _setEmailHeaderInputValue('doc-email-bcc', fields.bcc || '', { preserveFocused: true, preserveNonEmpty: preserveEmailHeader });
     const hasCcBcc = !!(
       fields.cc ||
       fields.bcc ||
@@ -3786,7 +3695,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
         }
         // Mark the source email as answered if this was a reply
         if (sourceUid) {
-          _clearEmailLocalDraft(sourceUid, sourceFolder, inReplyTo);
           const markParams = new URLSearchParams({ folder: sourceFolder });
           if (data.account_id || activeAccountId) markParams.set('account_id', data.account_id || activeAccountId);
           fetch(`${API_BASE}/api/email/mark-answered/${encodeURIComponent(sourceUid)}?${markParams.toString()}`, { method: 'POST' }).catch(() => {});
@@ -4258,7 +4166,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
         const data = await res.json();
         if (data.success) {
           if (uiModule) uiModule.showToast(`Scheduled for ${new Date(localDt).toLocaleString()}`);
-          _clearCurrentEmailLocalDraft();
           cleanup();
           // Close the document
           _closeWithoutDeleting(true);
@@ -4401,10 +4308,7 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     const isEmail = doc.language === 'email';
     if (isEmail) {
       _setMarkdownPreviewActive(false, { remember: false });
-      const forceHeaderFields = !!doc._skipLocalDraftOnce;
-      const applyLocalDraft = forceHeaderFields ? false : true;
-      doc._skipLocalDraftOnce = false;
-      _showEmailFields(doc, { applyLocalDraft, forceHeaderFields });
+      _showEmailFields(doc);
     } else {
       _hideEmailFields();
       const wantsMarkdownPreview = (doc.language || 'markdown') === 'markdown' && doc._markdownPreviewActive === true;
@@ -4541,7 +4445,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
       const _rich = document.getElementById('doc-email-richbody');
       const _emailBody = (_rich && _rich.style.display !== 'none') ? _rich.innerHTML : textarea.value;
       doc.content = _buildEmailContent(to, subject, inReplyTo, references, _emailBody, sourceUid, sourceFolder, cc, bcc);
-      _persistEmailLocalDraftSoon();
     } else if (textarea) {
       // Don't clobber a PDF/form-backed doc's source when the textarea is empty
       // (it's hidden behind the rendered PDF view, so its value isn't the source
@@ -5384,7 +5287,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
       document.getElementById(id)?.addEventListener('input', () => {
         _syncEmailHeaderSummary();
         saveCurrentToMap();
-        _persistEmailLocalDraftSoon();
         clearTimeout(_autoSaveDebounce);
         _autoSaveDebounce = setTimeout(() => { saveDocument({ silent: true }); }, 800);
       });
@@ -5669,8 +5571,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
         _autoTitleDebounce = setTimeout(() => autoTitleFromContent(ta.value), 600);
         clearTimeout(_autoSaveDebounce);
         _autoSaveDebounce = setTimeout(() => { saveDocument({ silent: true }); }, 2000);
-        const doc = activeDocId && docs.get(activeDocId);
-        if (doc && doc.language === 'email') _persistEmailLocalDraftSoon();
       });
       ta.addEventListener('paste', (e) => {
         if (_activeDocLanguage() !== 'markdown') return;
@@ -6902,13 +6802,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
   export function injectFreshDoc(doc) {
     if (!doc || !doc.id) return;
     const sessionId = doc.session_id || _lastSessionId || null;
-    if (doc.language === 'email') {
-      doc._skipLocalDraftOnce = true;
-      try {
-        const fields = _parseEmailHeader(doc.current_content || doc.content || '');
-        _clearEmailLocalDraft(fields.sourceUid, fields.sourceFolder, fields.inReplyTo);
-      } catch (_) {}
-    }
     addDocToTabs(doc, sessionId);
     // Use _ensureDocPaneMounted (not `if (!isOpen) openPanel()`): when a draft
     // is composed from the email modal, `isOpen` can be stale-true while the
@@ -7033,7 +6926,7 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
 
     doc.content = _buildEmailContentFromFields(merged, body);
     if (activeDocId === docId) {
-      _showEmailFields(doc, { applyLocalDraft: false });
+      _showEmailFields(doc);
     }
     clearTimeout(_autoSaveDebounce);
     _autoSaveDebounce = setTimeout(() => { saveDocument({ silent: true }); }, 800);
@@ -7214,7 +7107,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
       sessionId: sessionId || doc.session_id,
       userSetLanguage: !!doc.language,
       _composeAtts: existing?._composeAtts,
-      _skipLocalDraftOnce: !!doc._skipLocalDraftOnce,
       // Provenance for the "Send signed reply" flow
       sourceEmailUid:       doc.source_email_uid || null,
       sourceEmailFolder:    doc.source_email_folder || null,
@@ -10584,10 +10476,8 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
       if (isEmailUpdate) {
         const updatedDocForEmail = docs.get(docId);
         if (updatedDocForEmail) {
-          const updatedFields = _parseEmailHeader(updatedDocForEmail.content || '');
-          _clearEmailLocalDraft(updatedFields.sourceUid, updatedFields.sourceFolder, updatedFields.inReplyTo);
           _setMarkdownPreviewActive(false, { remember: false });
-          _showEmailFields(updatedDocForEmail, { applyLocalDraft: false });
+          _showEmailFields(updatedDocForEmail);
         }
       } else {
         if (textarea) textarea.value = newContent;
@@ -10610,9 +10500,7 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     if (isEmailUpdate && updatedDoc) {
       updatedDoc.language = 'email';
       if (langSelect) langSelect.value = 'email';
-      const updatedFields = _parseEmailHeader(updatedDoc.content || '');
-      _clearEmailLocalDraft(updatedFields.sourceUid, updatedFields.sourceFolder, updatedFields.inReplyTo);
-      _showEmailFields(updatedDoc, { applyLocalDraft: false });
+      _showEmailFields(updatedDoc);
     }
     if (updatedDoc && !updatedDoc.userSetLanguage && !updatedDoc.language) {
       setTimeout(attemptAutoDetect, 100);
