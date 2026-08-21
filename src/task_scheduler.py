@@ -2552,9 +2552,8 @@ class TaskScheduler:
                 "DECISION FRAMEWORK — follow these rules, not just tool descriptions:\n\n"
 
                 "CONTEXT GATHERING (before any response involving a specific person):\n"
-                "1. resolve_contact if you only have a name and need their email\n"
-                "2. search_chats for recent conversations mentioning them or their topic\n"
-                "3. manage_memory to check stored facts about them\n"
+                "1. search_chats for recent conversations mentioning them or their topic\n"
+                "2. manage_memory to check stored facts about them\n"
                 "Skip steps you already have answers for. Don't search for the user themselves.\n\n"
 
                 "EMAIL HANDLING:\n"
@@ -2573,10 +2572,9 @@ class TaskScheduler:
                 "Stop as soon as you have a sufficient answer.\n\n"
 
                 "'SEND TO [NAME]' FLOW:\n"
-                "1. resolve_contact to find their email\n"
-                "2. If a document is open, use its content as the body\n"
-                "3. Draft the email in a document (create_document with language='email')\n"
-                "4. Tell the user to review — NEVER auto-send\n\n"
+                "1. If a document is open, use its content as the body\n"
+                "2. Draft the email in a document (create_document with language='email')\n"
+                "3. Tell the user to review — NEVER auto-send\n\n"
 
                 "SELF-IMPROVEMENT — use manage_memory constantly:\n"
                 "- When the user corrects you, IMMEDIATELY store the correction as a memory.\n"
@@ -2628,7 +2626,7 @@ class TaskScheduler:
                 enabled_tools=json.dumps([
                     "manage_calendar", "manage_notes", "manage_tasks", "manage_memory",
                     "list_email_accounts", "list_emails", "read_email", "send_email", "reply_to_email", "archive_email",
-                    "mark_email_read", "delete_email", "resolve_contact",
+                    "mark_email_read", "delete_email",
                     "search_chats", "web_search", "web_fetch", "read_file",
                     "create_document", "update_document", "edit_document",
                     "generate_image", "trigger_research",

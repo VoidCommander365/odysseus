@@ -546,7 +546,6 @@ def test_stored_document_results_taint_before_later_host_actions(tool_name):
     "tool_name,content",
     [
         ("manage_calendar", '{"action":"list"}'),
-        ("manage_contact", '{"action":"list"}'),
         ("manage_documents", '{"body":{"action":"read"}}'),
         ("manage_memory", "search\nneedle"),
         ("manage_notes", '{"action":"find","query":"needle"}'),
@@ -592,7 +591,6 @@ def test_private_manager_write_aliases_keep_write_effect(tool_name, content):
     "tool_name,content",
     [
         ("manage_calendar", '{"action":"delete_event"}'),
-        ("manage_contact", '{"action":"delete"}'),
         ("manage_documents", '{"action":"tidy"}'),
         ("manage_endpoints", '{"action":"delete"}'),
         ("manage_bg_jobs", '{"action":"kill","job_id":"job-1"}'),

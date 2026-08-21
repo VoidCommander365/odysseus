@@ -52,7 +52,7 @@ ASSISTANT_ALWAYS_AVAILABLE = frozenset({
     "manage_calendar", "manage_notes", "manage_tasks",
     "manage_memory", "web_search", "read_file",
     "create_document", "update_document",
-    "resolve_contact", "search_chats",
+    "search_chats",
     "api_call",  # For Miniflux/Gitea/Linkding/etc. integrations
     # Core UI control (toggles, open panels, switch model/mode, themes).
     # Always available so vague follow-ups ("now make it playful", "make it
@@ -90,7 +90,7 @@ BUILTIN_TOOL_DESCRIPTIONS: Dict[str, str] = {
     "pipeline": "Run a multi-step AI pipeline with multiple models. Chain tasks together in sequence.",
     "list_models": "List all available AI models and their endpoints.",
     "manage_session": "Chat management: rename, archive, delete, or fork chats (the UI calls these 'chats'; internally 'sessions'). Use for 'rename my chats', 'rename this chat', 'archive/delete a chat'.",
-    "manage_memory": "Memory management: list, add, edit, delete, or search persistent memories. For facts about the USER (their name, preferences, where they live). NOT for info about ANOTHER person — addresses, phones, emails belonging to a contact go in manage_contact, not memory.",
+    "manage_memory": "Memory management: list, add, edit, delete, or search persistent memories. For facts about the USER (their name, preferences, where they live).",
     "manage_skills": "Skill management: add, update, publish, or search reusable skills/presets.",
     "manage_tasks": "Scheduled task management: list, create, edit, delete, pause, resume, or run cron tasks.",
     "manage_endpoints": "Endpoint management: list, add, delete, enable, or disable model API endpoints.",
@@ -119,8 +119,6 @@ BUILTIN_TOOL_DESCRIPTIONS: Dict[str, str] = {
     "delete_email": "Delete an email — moves to Trash by default, or expunges permanently with permanent=true.",
     "mark_email_read": "Mark an email as read or unread by toggling the \\Seen flag.",
     "bulk_email": "Perform one action on many emails at once. Use for delete all those, archive these, mark all read, move spam to junk. Takes explicit UIDs from list_emails or all_unread=true. Always pass account for Gmail/work/custom mailbox results.",
-    "resolve_contact": "Look up a contact's email address by name. Searches CardDAV address book and sent email history. Use when the user says 'message [name]', 'email [name]', or 'send to [name]' without an email address.",
-    "manage_contact": "Save / update / delete / list address-book contacts (CardDAV). Use for info about ANOTHER person — name, email, phone, postal address. Args: action=list|add|update|delete, name, email, phones, address, uid (from list). For 'save this for <person>' / address pastes / phone numbers next to a name, this is the right tool — NOT manage_memory. Do NOT use for facts about the USER ('my name is X'); those are manage_memory.",
     "manage_notes": "Create and manage notes and checklists (Google Keep-style). ALWAYS use this for note/todo/checklist/reminder creation — NEVER hit /api/notes via app_api. Accepts natural-language `due_date` like 'tomorrow at 9am' or '11pm today' (parsed in the USER'S timezone). The due_date IS the reminder — it fires a notification at that time, so do NOT also create a calendar event for the same reminder. Set colors, labels, pin, archive. Do NOT use manage_memory for note content.",
     "manage_calendar": "Calendar event management: list, create, update, delete. Each event can carry a tag/category (event_type — work/personal/health/travel/meal/social/admin/other) and importance (low/normal/high/critical). Resolve today/tomorrow using the Current date and time context, then use ISO datetimes in the user's local wall time; supports all-day events. Use rrule only for explicit recurrence; for update_event pass rrule='' to remove repeats. For event reminders/alarms, pass reminder_minutes; this creates the Notes reminder, so do not also call manage_notes for the same reminder.",
     "download_model": "Download a HuggingFace model to a local or remote server. Specify repo_id (e.g. 'Qwen/Qwen3-8B'), optional server host, and optional include filter for specific files.",
@@ -351,7 +349,7 @@ class ToolIndex:
         # whole email toolset and crowding out the relevant tools — the model then
         # believed it had only email tools and refused web/other tasks (#1707).
         frozenset({"email", "emails", "mail", "mails", "gmail", "googlemail", "message", "messages", "send", "reply", "replies", "inbox", "unread"}):
-            {"list_email_accounts", "list_emails", "read_email", "scan_email_unsubscribes", "unsubscribe_email", "send_email", "reply_to_email", "bulk_email", "delete_email", "archive_email", "mark_email_read", "resolve_contact", "ui_control"},
+            {"list_email_accounts", "list_emails", "read_email", "scan_email_unsubscribes", "unsubscribe_email", "send_email", "reply_to_email", "bulk_email", "delete_email", "archive_email", "mark_email_read", "ui_control"},
         frozenset({"calendar", "event", "meeting", "schedule", "appointment"}):
             {"manage_calendar"},
         # Detached background `bash` jobs (#!bg): check on / read output / kill.
@@ -380,24 +378,6 @@ class ToolIndex:
                    "cron", "periodically", "on a schedule", "set up a task",
                    "create a task", "summarize my inbox every", "remind me every"}):
             {"manage_tasks"},
-        frozenset({"contact", "address", "phone", "who is"}):
-            {"resolve_contact", "manage_contact"},
-        frozenset({"save contact", "add contact", "new contact", "update contact",
-                   "edit contact", "delete contact", "remove contact",
-                   "save this person", "add to contacts", "save to contacts",
-                   # "add <name> to (my) contacts" — words between 'add' and
-                   # 'contacts' break the literal phrase match above, so anchor
-                   # on the tail.
-                   "to my contacts", "to contacts", "to address book",
-                   # "save this for <person>" / "save it for <person>" — the user
-                   # is storing info on a known person without using the literal
-                   # word 'contact'. Catches the address/phone-paste pattern.
-                   "save this for", "save it for", "save for",
-                   "save this one for", "save that for",
-                   # Postal-address-like signals
-                   "postal code", "zip code", "street address",
-                   "mailing address", "their address"}):
-            {"manage_contact"},
         # "Ask another model" intent → chat_with_model relays to a
         # different model and returns its answer. ask_teacher escalates
         # to the configured teacher. (second_opinion was removed.)
@@ -543,53 +523,6 @@ class ToolIndex:
         # prompts do not drag web schemas into the agent context.
         if self._WEB_RE.search(query):
             base.update({"web_search", "web_fetch"})
-        # Hard steering: when the query is a clear "save info about a specific
-        # person" pattern (address paste + name, phone next to a name, etc.),
-        # the model has been observed defaulting to manage_memory even with
-        # manage_contact in the toolset. Pull memory out for these queries so
-        # the model literally cannot pick it. ALWAYS_AVAILABLE includes
-        # manage_memory by default; we override that here.
-        # The "for/to <word>" check needs to allow lowercase names (users
-        # don't always capitalize) but filter out timing/pronoun stopwords
-        # so "save this for later" / "save for tomorrow" don't trigger.
-        _CONTACT_STOPWORDS_AFTER_FOR = {
-            "later", "tomorrow", "yesterday", "now", "then", "today",
-            "tonight", "me", "us", "you", "him", "her", "them", "myself",
-            "yourself", "next", "this", "that", "the", "a", "an", "future",
-            "real", "use", "uses", "another", "future", "reference",
-        }
-        # Regex catches "save (this|it|the|her|...|<noun>) for <name>" / "to my
-        # contacts" patterns. More forgiving than literal-keyword matching —
-        # 'save this address for Alex' uses one extra word between 'save' and
-        # 'for' that breaks the contiguous 'save this for' phrase.
-        save_for_match = re.search(
-            r"\bsave\b(?:\s+\w+){0,3}\s+(?:for|to)\s+([A-Za-z]+)",
-            ql,
-        )
-        # "to my contacts", "into my contacts", "in my address book", etc.
-        to_contacts = re.search(r"\b(?:to|in|into)\s+(?:my\s+)?(?:contacts|address\s+book)\b", ql)
-        # Possessive: "save (his|her|their) (address|phone|email|number) ..."
-        # — strong contact signal even without "for <name>". Force-include
-        # manage_contact here too since the keyword fallback misses this
-        # construction.
-        possessive_contact = re.search(
-            r"\bsave\b(?:\s+\w+){0,2}\s+(?:his|her|their)\s+(?:address|phone|number|email|contact|details)",
-            ql,
-        )
-        word_after = (
-            save_for_match.group(1).lower() if save_for_match else None
-        )
-        contact_only_signal = (
-            (save_for_match is not None
-             and word_after is not None
-             and word_after not in _CONTACT_STOPWORDS_AFTER_FOR)
-            or to_contacts is not None
-            or possessive_contact is not None
-        )
-        if possessive_contact is not None:
-            base.add("manage_contact")
-        if contact_only_signal and "manage_contact" in base:
-            base.discard("manage_memory")
         return base
 
 

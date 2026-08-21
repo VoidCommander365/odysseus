@@ -113,7 +113,6 @@ _register(
         "list_email_accounts",
         "list_emails",
         "read_email",
-        "resolve_contact",
         "scan_email_unsubscribes",
         "search_chats",
         "search_emails",
@@ -141,7 +140,6 @@ _register(
     {
         "create_document",
         "manage_calendar",
-        "manage_contact",
         "manage_documents",
         "manage_memory",
         "manage_notes",
@@ -314,7 +312,6 @@ def capabilities_for_tool(tool_name: Any) -> ToolCapabilities:
 _PRIVATE_ACTION_READS: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "manage_calendar": frozenset({"list_calendars", "list_events"}),
-        "manage_contact": frozenset({"list"}),
         "manage_documents": frozenset({"list", "read", "view", "open", "get"}),
         "manage_memory": frozenset({"list", "search"}),
         "manage_notes": frozenset({"list", "search", "find", "view"}),
@@ -330,7 +327,6 @@ _PRIVATE_ACTION_WRITES: Mapping[str, frozenset[str]] = MappingProxyType(
         "manage_calendar": frozenset(
             {"create_event", "update_event", "delete_event"}
         ),
-        "manage_contact": frozenset({"add", "update", "edit", "delete"}),
         "manage_documents": frozenset({"delete", "tidy"}),
         "manage_memory": frozenset({"add", "edit", "delete"}),
         "manage_notes": frozenset({"add", "update", "delete", "toggle_item"}),
@@ -355,7 +351,6 @@ _PRIVATE_ACTION_WRITES: Mapping[str, frozenset[str]] = MappingProxyType(
 _ACTION_DESTRUCTIVE: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "manage_calendar": frozenset({"delete_event"}),
-        "manage_contact": frozenset({"delete"}),
         "manage_documents": frozenset({"delete", "tidy"}),
         "manage_endpoints": frozenset({"delete"}),
         "manage_bg_jobs": frozenset({"kill", "stop", "cancel", "terminate"}),
