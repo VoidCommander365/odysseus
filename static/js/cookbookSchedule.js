@@ -309,7 +309,7 @@ try { (function () {
               }
             }
             // The `cookbook_task_id:` marker on its own line lets
-            // calendar.js's event-form code detect that this event was
+            // event-form code detect that this event was
             // created from a Cookbook schedule and render an
             // "Open task" button alongside the description, so the user
             // can jump straight to the source task from the calendar UI.

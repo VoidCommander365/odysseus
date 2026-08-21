@@ -316,9 +316,8 @@ let _libraryArchivedView = false;   // Documents tab showing archived docs?
   async function libraryFetch(append) {
     if (!append) _libraryOffset = 0;
     // Bump page size to the backend max (50) so fullscreen doesn't leave
-    // empty space below the loaded rows — same idea as emailLibrary's
-    // limit=100, but documents_library validates `le=50` so we have to
-    // cap at that. Auto-fill loop below picks up any remaining gap.
+    // empty space below the loaded rows. documents_library validates `le=50`
+    // so we cap at that. Auto-fill loop below picks up any remaining gap.
     const params = new URLSearchParams({
       sort: _librarySort,
       offset: String(_libraryOffset),

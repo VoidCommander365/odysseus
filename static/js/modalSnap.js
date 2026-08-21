@@ -2,7 +2,7 @@
 //
 // Adds a "drag-to-right" gesture that docks a modal as a right-side panel
 // (mirrors the snap-to-top fullscreen pattern used by _makeDraggable in
-// emailLibrary.js / documentLibrary.js / galleryEditor.js). While docked:
+// documentLibrary.js / galleryEditor.js). While docked:
 //   - the modal-content lives at `right: 0; top: 0; bottom: 0` with a
 //     viewport-fraction width
 //   - body gets `right-dock-active` + `--right-dock-w` so the workspace
@@ -228,9 +228,7 @@ function _applyEmailDocSplitGeometry(left, emailWidth) {
   document.documentElement.style.setProperty('--email-doc-split-email-w', `${emailWidth}px`);
   document.documentElement.style.setProperty('--email-doc-split-right-x', `${x}px`);
 
-  // emailLibrary.js pins the document pane with inline !important styles
-  // after opening a document beside a snapped email. Update that inline
-  // geometry too, otherwise the email resizes but the document stays put.
+  // Update any inline geometry on the snapped panel so it tracks the drag.
   const docPane = document.getElementById('doc-editor-pane');
   if (!docPane || window.innerWidth <= 768) return;
   docPane.style.setProperty('position', 'fixed', 'important');

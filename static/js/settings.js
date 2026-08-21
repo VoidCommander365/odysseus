@@ -2659,16 +2659,6 @@ async function initEmailAccountsSettings() {
   const root = el('settings-modal');
   if (!root || !root.querySelector('[data-settings-panel="email"]')) return;
 
-  el('set-email-open-library-settings')?.addEventListener('click', async () => {
-    try {
-      const mod = await import('./emailLibrary.js?v=20260815approvalsave1');
-      if (typeof mod.openEmailLibrarySettings === 'function') {
-        await mod.openEmailLibrarySettings();
-      }
-    } catch (e) {
-      console.warn('Failed to open Email settings page', e);
-    }
-  });
   const manageBtn = el('set-email-open-integrations');
   if (manageBtn && manageBtn.dataset.bound !== '1') {
     manageBtn.dataset.bound = '1';

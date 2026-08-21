@@ -3822,17 +3822,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
           uiModule.showToast('Message sent', {
             duration: 7000,
             leadingIcon: 'check',
-            action: 'View Message',
-            onAction: () => {
-              import('./emailLibrary.js?v=20260815approvalsave1').then(mod => {
-                const open = mod.openEmailLibrary || (mod.default && mod.default.openEmailLibrary);
-                if (open) open({
-                  account_id: data.account_id || activeAccountId || null,
-                  folder: data.sent_folder || 'Sent',
-                  uid: data.sent_uid || null,
-                });
-              }).catch(() => {});
-            },
           });
         }
         // Mark the source email as answered if this was a reply

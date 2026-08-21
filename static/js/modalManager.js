@@ -286,7 +286,7 @@ function _renderDock() {
   // Capture any custom data-* attributes (e.g. data-tab-num) BEFORE we
   // remove old chips, so they can be restored on the rebuilt chips.
   // Without this, external systems that stamp attributes on chips
-  // (like emailLibrary's slot-number badge) see the attribute wiped on
+  // (like a modal's slot-number badge) see the attribute wiped on
   // every re-render — most visibly after a chain drag, when chips are
   // at body level and get swept by the next render.
   const oldData = new Map();
@@ -353,7 +353,7 @@ function _renderDock() {
     chip.dataset.modalId = id;
     chip.title = `Restore ${meta.label}`;
     // Restore any external data-* attributes the previous chip carried
-    // (e.g. emailLibrary's data-tab-num slot-number badge).
+    // (e.g. a modal's data-tab-num slot-number badge).
     const prevAttrs = oldData.get(id);
     if (prevAttrs) {
       for (const [name, val] of Object.entries(prevAttrs)) {

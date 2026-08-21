@@ -701,9 +701,8 @@ function initializeEventListeners() {
         return;
       }
 
-      // Calendar owns a few inner Escape layers (settings panel, event form,
-      // then the calendar modal itself). Let calendar.js handle those instead
-      // of falling through to unrelated page-level fallbacks like document
+      // Calendar used to own a few inner Escape layers; without it, fall
+      // through to unrelated page-level fallbacks like document
       // panel minimize.
       const calendarModal = document.getElementById('calendar-modal');
       if (calendarModal && !calendarModal.classList.contains('hidden') && getComputedStyle(calendarModal).display !== 'none') {
