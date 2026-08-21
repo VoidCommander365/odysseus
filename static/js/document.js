@@ -25,11 +25,7 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
   let _autoDetectDebounce = null;
   let _autoTitleDebounce = null;
   let _autoSaveDebounce = null;
-  let _emailRichbodySaveDebounce = null;
   let _emailHeaderManualExpandUntil = 0;
-  let _emailStreamAnimFrame = null;
-  let _emailStreamRenderedBody = '';
-  let _emailStreamTargetBody = '';
   let _emailSendInFlight = false;
   let _lastAutoSaveErrorAt = 0;
   let _animationInProgress = false;
@@ -2412,16 +2408,11 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
       );
     }
   }
-  function _scheduleEmailRichbodySave() {
-    clearTimeout(_emailRichbodySaveDebounce);
-    _emailRichbodySaveDebounce = setTimeout(() => { saveDocument({ silent: true }); }, 2500);
-  }
   function _wireEmailRichbody(rich) {
     if (rich._wired) { _syncEmailRichbody(rich); return; }
     rich._wired = true;
     rich.addEventListener('input', () => {
       _syncEmailRichbody(rich);
-      _scheduleEmailRichbodySave();
     });
     // Highlight toolbar buttons (B / I / S, headings, lists) when the caret
     // sits inside formatted text. queryCommandState reflects the live
@@ -2519,53 +2510,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     });
   }
 
-  function _renderStreamingEmailBody(body, { immediate = false } = {}) {
-    const rich = document.getElementById('doc-email-richbody');
-    const textarea = document.getElementById('doc-editor-textarea');
-    if (!rich) return;
-
-    _emailStreamTargetBody = body || '';
-    if (!_emailStreamRenderedBody && textarea && textarea.value) {
-      _emailStreamRenderedBody = textarea.value;
-    }
-
-    const applyBody = (value) => {
-      if (textarea) {
-        textarea.value = value;
-        textarea.scrollTop = textarea.scrollHeight;
-      }
-      rich.innerHTML = _emailBodyToHtml(value);
-      rich.scrollTop = rich.scrollHeight;
-    };
-
-    if (immediate) {
-      if (_emailStreamAnimFrame) cancelAnimationFrame(_emailStreamAnimFrame);
-      _emailStreamAnimFrame = null;
-      _emailStreamRenderedBody = _emailStreamTargetBody;
-      applyBody(_emailStreamRenderedBody);
-      return;
-    }
-
-    if (_emailStreamTargetBody.length < _emailStreamRenderedBody.length ||
-        !_emailStreamTargetBody.startsWith(_emailStreamRenderedBody)) {
-      _emailStreamRenderedBody = '';
-    }
-
-    if (_emailStreamAnimFrame) return;
-    const tick = () => {
-      const remaining = _emailStreamTargetBody.length - _emailStreamRenderedBody.length;
-      if (remaining <= 0) {
-        _emailStreamAnimFrame = null;
-        return;
-      }
-      const step = Math.max(1, Math.min(8, Math.ceil(remaining / 18)));
-      _emailStreamRenderedBody = _emailStreamTargetBody.slice(0, _emailStreamRenderedBody.length + step);
-      applyBody(_emailStreamRenderedBody);
-      _emailStreamAnimFrame = requestAnimationFrame(tick);
-    };
-    _emailStreamAnimFrame = requestAnimationFrame(tick);
-  }
-
   function _emailQuoteStartIndex(lines) {
     for (let i = 0; i < lines.length; i++) {
       const line = String(lines[i] || '').trim();
@@ -2654,31 +2598,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
 
   function _emailReplyOwnText(text) {
     return _stripEmailReplyQuoteText(text).body;
-  }
-
-  function _setEmailBodyText(textarea, value) {
-    if (!textarea) return;
-    textarea.value = value || '';
-    syncHighlighting();
-    const rich = _emailRichbodyActive();
-    if (rich) rich.innerHTML = _emailBodyToHtml(textarea.value);
-  }
-
-  async function _streamEmailBodyText(textarea, value) {
-    if (!textarea) return;
-    const finalText = String(value || '');
-    const maxFrames = 90;
-    const chunk = Math.max(8, Math.ceil(finalText.length / maxFrames));
-    textarea.value = '';
-    const rich = _emailRichbodyActive();
-    if (rich) rich.innerHTML = '';
-    for (let i = 0; i < finalText.length; i += chunk) {
-      const next = finalText.slice(0, i + chunk);
-      textarea.value = next;
-      if (rich) rich.innerHTML = _emailBodyToHtml(next);
-      await new Promise(resolve => requestAnimationFrame(resolve));
-    }
-    _setEmailBodyText(textarea, finalText);
   }
 
   function _focusEmailBodyEnd() {
@@ -2918,10 +2837,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     if (_rich && _srcWrap) {
       _srcWrap.style.display = 'none';
       _rich.style.display = '';
-      if (_emailStreamAnimFrame) cancelAnimationFrame(_emailStreamAnimFrame);
-      _emailStreamAnimFrame = null;
-      _emailStreamRenderedBody = fields.body || '';
-      _emailStreamTargetBody = fields.body || '';
       _rich.innerHTML = _emailBodyToHtml(fields.body);
       _wireEmailRichbody(_rich);
       setTimeout(() => {
@@ -2985,8 +2900,10 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
 
     if (srcWrap) srcWrap.style.display = 'none';
     rich.style.display = '';
-    _renderStreamingEmailBody(fields.body || '');
-    if (doc._originalBody == null) doc._originalBody = fields.body || '';
+    const body = fields.body || '';
+    if (textarea) textarea.value = body;
+    rich.innerHTML = _emailBodyToHtml(body);
+    if (doc._originalBody == null) doc._originalBody = body;
     _syncEmailHeaderSummary();
   }
 
@@ -4017,7 +3934,9 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
         cleanReply = cleanReply.replace(/\n*On\b[\s\S]*?\bwrote:[\s\S]*$/m, '').trim();
         const quote = splitCurrent.quote || '';
         const newBody = cleanReply + (quote ? `\n\n${quote}` : '');
-        await _streamEmailBodyText(textarea, newBody);
+        textarea.value = newBody;
+        const rich = _emailRichbodyActive();
+        if (rich) rich.innerHTML = _emailBodyToHtml(newBody);
         _clearDocAiReplyContext(contextKey || _docAiReplyContextKey());
         if (uiModule) uiModule.showToast(`AI draft inserted (${data.model_used || 'AI'})`);
       } else {
@@ -6843,7 +6762,11 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     );
     if (activeDocId === docId) {
       const textarea = document.getElementById('doc-editor-textarea');
-      if (textarea) await _streamEmailBodyText(textarea, body);
+      if (textarea) {
+        textarea.value = body;
+        const rich = _emailRichbodyActive();
+        if (rich) rich.innerHTML = _emailBodyToHtml(body);
+      }
     }
     clearTimeout(_autoSaveDebounce);
     _autoSaveDebounce = setTimeout(() => { saveDocument({ silent: true }); }, 800);
@@ -10228,7 +10151,11 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     const finishingDoc = oldId ? docs.get(oldId) : null;
     if (oldId === activeDocId && (finishingDoc?.language || '').toLowerCase() === 'email') {
       const fields = _parseEmailHeader(finishingDoc.content || '');
-      _renderStreamingEmailBody(fields.body || '', { immediate: true });
+      const body = fields.body || '';
+      const textarea = document.getElementById('doc-editor-textarea');
+      const rich = document.getElementById('doc-email-richbody');
+      if (textarea) textarea.value = body;
+      if (rich) rich.innerHTML = _emailBodyToHtml(body);
     }
     _streamDocId = null;
     // Hide streaming indicator + cursor
