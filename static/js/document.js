@@ -3649,135 +3649,25 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     try { input.setSelectionRange(end, end); } catch (_) {}
   }
 
-  // Search contacts for an autocomplete dropdown. `input` is the To/Cc/Bcc
-  // text field, `sugg` is its sibling .email-autocomplete div. Suggestions
-  // are scoped to the LAST comma-separated fragment so already-entered
-  // recipients aren't disturbed.
-  async function _searchContacts(input, sugg) {
-    if (!input || !sugg) return;
-    const { fragment } = _splitRecipientsAndFragment(input.value);
-    if (!fragment || fragment.length < 1) { sugg.style.display = 'none'; return; }
-    try {
-      const res = await fetch(`${API_BASE}/api/contacts/search?q=${encodeURIComponent(fragment)}`);
-      const data = await res.json();
-      if (!data.results || data.results.length === 0) {
-        sugg.style.display = 'none';
-        return;
-      }
-      // Already-entered emails in this field — skip in the dropdown so
-      // users don't accidentally add the same person twice.
-      const already = new Set(
-        (input.value || '').split(',').map(s => {
-          const m = s.match(/<([^>]+)>/);
-          return (m ? m[1] : s).trim().toLowerCase();
-        }).filter(Boolean)
-      );
-      sugg.innerHTML = '';
-      sugg.dataset.navStarted = '0';
-      let count = 0;
-      for (const c of data.results) {
-        for (const em of (c.emails || [])) {
-          if (already.has(em.toLowerCase())) continue;
-          const item = document.createElement('div');
-          item.className = 'contact-suggestion';
-          item.setAttribute('role', 'option');
-          item.setAttribute('aria-selected', 'false');
-          item.innerHTML = `<span class="contact-name">${_escHtml(c.name)}</span><span class="contact-email">${_escHtml(em)}</span>`;
-          item.addEventListener('mouseenter', () => {
-            sugg.dataset.navStarted = '1';
-            sugg.querySelectorAll('.contact-suggestion').forEach(it => {
-              it.classList.toggle('active', it === item);
-              it.setAttribute('aria-selected', it === item ? 'true' : 'false');
-            });
-          });
-          // mousedown fires before blur so the click doesn't get lost
-          item.addEventListener('mousedown', (e) => { e.preventDefault(); _commitRecipient(input, sugg, em); });
-          item.addEventListener('click', (e) => { e.preventDefault(); _commitRecipient(input, sugg, em); });
-          sugg.appendChild(item);
-          count += 1;
-        }
-      }
-      if (count === 0) { sugg.style.display = 'none'; return; }
-      sugg.style.display = '';
-    } catch (e) {
-      sugg.style.display = 'none';
-    }
-  }
-
-  // Bind input/keydown/blur for a recipient field so it gets the same
-  // autocomplete-and-commit behavior. Used by To/Cc/Bcc.
+  // Bind blur/Enter/Escape for a recipient field. Used by To/Cc/Bcc.
   function _wireRecipientAutocomplete(inputId, suggId) {
     const input = document.getElementById(inputId);
     const sugg = document.getElementById(suggId);
     if (!input || !sugg) return;
-    let timer = null;
-    input.addEventListener('input', () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => _searchContacts(input, sugg), 150);
-    });
     input.addEventListener('blur', () => {
       setTimeout(() => { sugg.style.display = 'none'; }, 200);
     });
     input.addEventListener('keydown', (e) => {
-      const open = sugg.style.display !== 'none';
-      const items = open ? sugg.querySelectorAll('.contact-suggestion') : [];
-      const active = open ? sugg.querySelector('.contact-suggestion.active') : null;
-      let idx = active ? Array.from(items).indexOf(active) : -1;
-      const setActive = (nextIdx) => {
-        items.forEach((it, i) => {
-          const on = i === nextIdx;
-          it.classList.toggle('active', on);
-          it.setAttribute('aria-selected', on ? 'true' : 'false');
-        });
-        if (items[nextIdx]) {
-          items[nextIdx].scrollIntoView({ block: 'nearest' });
-        }
-      };
-      if (open && e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (!items.length) return;
-        if (sugg.dataset.navStarted !== '1') {
-          idx = Math.max(0, idx);
-          sugg.dataset.navStarted = '1';
-        } else {
-          idx = Math.min(items.length - 1, idx + 1);
-        }
-        setActive(idx);
-      } else if (open && e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (!items.length) return;
-        sugg.dataset.navStarted = '1';
-        idx = Math.max(0, idx - 1);
-        setActive(idx);
-      } else if (e.key === 'Enter') {
-        // If a suggestion is highlighted, commit it. Otherwise — if the
-        // current fragment already looks like a complete email — commit
-        // the raw text so users who type a brand-new address don't have
-        // to add the comma themselves.
-        if (active) {
+      if (e.key === 'Enter') {
+        // If the current fragment looks like a complete email, commit it
+        // so the user can keep typing more recipients.
+        const { fragment } = _splitRecipientsAndFragment(input.value);
+        if (/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(fragment.trim())) {
           e.preventDefault();
-          const em = active.querySelector('.contact-email')?.textContent?.trim();
-          if (em) _commitRecipient(input, sugg, em);
-        } else {
-          const { fragment } = _splitRecipientsAndFragment(input.value);
-          if (/^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(fragment.trim())) {
-            e.preventDefault();
-            _commitRecipient(input, sugg, fragment.trim());
-          }
+          _commitRecipient(input, sugg, fragment.trim());
         }
-      } else if (e.key === 'Tab' && active) {
-        e.preventDefault();
-        const em = active.querySelector('.contact-email')?.textContent?.trim();
-        if (em) _commitRecipient(input, sugg, em);
       } else if (e.key === 'Escape') {
         sugg.style.display = 'none';
-      } else if (e.key === ',' || (e.key === ' ' && input.value.trim().endsWith(','))) {
-        // Typing a comma directly also accepts a highlighted suggestion.
-        if (active) {
-          e.preventDefault();
-          const em = active.querySelector('.contact-email')?.textContent?.trim();
-          if (em) _commitRecipient(input, sugg, em);
-        }
       }
     });
   }
@@ -3944,25 +3834,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
               }).catch(() => {});
             },
           });
-        }
-        // Auto-save recipients to the configured contacts backend (CardDAV).
-        // The compose fields accept plain emails and "Name <email>" chips.
-        const _contactPieces = [to, cc, bcc].join(',').split(/[,;]/).map(s => s.trim()).filter(Boolean);
-        const _seenContacts = new Set();
-        for (const piece of _contactPieces) {
-          const match = piece.match(/^(.*?)<([^>]+)>$/);
-          const email = (match ? match[2] : piece).trim();
-          const name = (match ? match[1] : '').replace(/^["']|["']$/g, '').trim();
-          if (!email || !/@/.test(email)) continue;
-          const key = email.toLowerCase();
-          if (_seenContacts.has(key)) continue;
-          _seenContacts.add(key);
-          fetch(`${API_BASE}/api/contacts/add`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email }),
-          }).catch(() => {});
         }
         // Mark the source email as answered if this was a reply
         if (sourceUid) {
@@ -5646,9 +5517,7 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
       });
     });
 
-    // Autocomplete for To / Cc / Bcc — typed fragment after the last
-    // comma triggers contact search; Enter / Tab / click on a suggestion
-    // appends "<email>, " so the user can keep typing more recipients.
+    // Commit complete email fragments on Enter for To / Cc / Bcc.
     _wireRecipientAutocomplete('doc-email-to',  'doc-email-to-suggestions');
     _wireRecipientAutocomplete('doc-email-cc',  'doc-email-cc-suggestions');
     _wireRecipientAutocomplete('doc-email-bcc', 'doc-email-bcc-suggestions');

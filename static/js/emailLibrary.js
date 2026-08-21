@@ -2540,7 +2540,6 @@ export function openEmailLibrary(opts = {}) {
   state._selectMode = false;
   if (state._selectedUids) state._selectedUids.clear();
   state._libSearchPills = [];
-  _libSuggestionCache = null;
   state._libFilter = 'all';
   state._libHasAttachments = false;
   // Animate the very first card render with a domino cascade (same as the
@@ -2898,7 +2897,7 @@ export function openEmailLibrary(opts = {}) {
   // \Flagged search). _libSort stays at its 'recent' default so the grid keeps
   // the API's newest-first order.
 
-  // Chip-bar search: pills represent contact + free-text filters; the live
+  // Chip-bar search: pills represent free-text + filter chips; the live
   // input below drives the autocomplete dropdown. Old behavior — instant
   // local filter on every keystroke + server-side IMAP search after 350ms
   // — is replaced by deterministic local filtering against the snapshot.
@@ -3609,56 +3608,7 @@ let _libPreSearchTotal = 0;
 let _libServerSearchEmails = null;
 let _libServerSearchTotal = 0;
 
-// Cached contact suggestions for the chip-input autocomplete. Built on
-// first focus / first keystroke from contacts + currently-loaded senders.
-let _libSuggestionCache = null;
 let _libSuggestionFocusIdx = 0;
-
-async function _buildSuggestionSource() {
-  // Combine the contacts list with senders/recipients visible in the
-  // loaded email list. Dedup by lowercased email address; prefer
-  // contact-supplied display names where present.
-  const map = new Map();
-  const _add = (name, email) => {
-    const key = String(email || '').trim().toLowerCase();
-    if (!key) return;
-    const prev = map.get(key);
-    if (!prev || (name && !prev.name)) {
-      map.set(key, { name: (name || '').trim(), email: key });
-    }
-  };
-  // 1) Senders / recipients already in the loaded grid.
-  for (const em of (state._libEmails || [])) {
-    _add(em.from_name, em.from_address);
-    const _parse = (s) => String(s || '').split(',').forEach(seg => {
-      const m = seg.match(/^\s*"?([^"<]*)"?\s*<?([^>]+)>?\s*$/);
-      if (m) _add(m[1], m[2]);
-    });
-    _parse(em.to);
-    _parse(em.cc);
-  }
-  // 2) Address book — best-effort.
-  try {
-    const r = await fetch(`${API_BASE}/api/contacts/list`, { credentials: 'same-origin' });
-    if (r.ok) {
-      const d = await r.json();
-      for (const c of (d.contacts || [])) {
-        const email = c.email || (c.emails && c.emails[0]) || '';
-        _add(c.name || c.full_name, email);
-      }
-    }
-  } catch (_) {}
-  return Array.from(map.values()).filter(x => x.email);
-}
-
-function _scoreSuggestion(s, needle) {
-  // Crude relevance: startsWith on name or email wins big; substring is fine.
-  const n = (s.name || '').toLowerCase();
-  const e = (s.email || '').toLowerCase();
-  if (n.startsWith(needle) || e.startsWith(needle)) return 3;
-  if (n.includes(needle) || e.includes(needle)) return 2;
-  return 0;
-}
 
 function _formatEmailSuggestionDate(em) {
   let d = null;
@@ -3720,19 +3670,13 @@ function _scoreFilterOption(opt, needle) {
 function _filterSuggestions(needle, limit = 10) {
   const n = String(needle || '').trim().toLowerCase();
   if (!n) return [];
-  // Filter / attachment matches first — typing 'unread' should surface
-  // the filter row before contact suggestions, since 'unread' isn't a
-  // person.
+  // Filter / attachment matches first.
   const filterMatches = _LIB_FILTER_OPTIONS
     .map(opt => ({ s: { kind: 'filter', value: opt.value, label: opt.label, icon: _libFilterIconFor(opt.value) }, score: _scoreFilterOption(opt, n) }))
     .filter(x => x.score > 0);
-  const src = _libSuggestionCache || [];
-  const contactMatches = src
-    .map(s => ({ s: { kind: 'contact', ...s }, score: _scoreSuggestion(s, n) }))
-    .filter(x => x.score > 0);
   // Email subject / sender-name matches — use the snapshot (unfiltered
   // list) when available so suggestions don't shrink as pills narrow the
-  // visible grid. Cap to 4 so contacts + filters stay visible.
+  // visible grid. Cap to 4 so filters stay visible.
   const emails = _libPreSearchEmails || state._libEmails || [];
   const emailMatches = [];
   for (const em of emails) {
@@ -3755,7 +3699,7 @@ function _filterSuggestions(needle, limit = 10) {
     }
     if (emailMatches.length >= 4) break;
   }
-  return filterMatches.concat(contactMatches).concat(emailMatches)
+  return filterMatches.concat(emailMatches)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map(x => x.s);
@@ -3763,14 +3707,6 @@ function _filterSuggestions(needle, limit = 10) {
 
 function _emailMatchesPill(em, pill) {
   if (!pill) return false;
-  if (pill.type === 'contact') {
-    const target = (pill.email || '').toLowerCase();
-    if (!target) return false;
-    if (String(em.from_address || '').toLowerCase() === target) return true;
-    if (String(em.to || '').toLowerCase().includes(target)) return true;
-    if (String(em.cc || '').toLowerCase().includes(target)) return true;
-    return false;
-  }
   if (pill.type === 'filter') {
     // Filter pills delegate to the server-side filter (state._libFilter)
     // or the has-attachments toggle. The list is already pre-filtered by
@@ -3802,9 +3738,9 @@ function _matchesQuery(em, q) {
   );
 }
 
-// Apply the active pill filter to the snapshot. Each pill is OR-ed; an
-// email shows up if ANY pill matches (a contact pill matches by from/to/cc
-// equality, a text pill matches by the broad _matchesQuery substring).
+// Apply the active pill filter to the snapshot. Each pill is OR-ed; a
+// filter pill is always true (server already filtered), a text pill matches
+// by the broad _matchesQuery substring.
 function _applyPillFilter() {
   _exitEmailReaderModeForList();
   const pills = state._libSearchPills || [];
@@ -3833,8 +3769,8 @@ function _applyPillFilter() {
   // draft OR an Enter-committed text pill), skip the local re-filter for
   // it — _emailMatchesPill only checks subject/from_name/from_address/
   // snippet (no BODY), so it was dropping legitimate server hits where
-  // the match was in body text. Real pills (contact, filter chips) still
-  // apply, and other text pills with different strings still apply.
+  // the match was in body text. Filter chips still apply, and other
+  // text pills with different strings still apply.
   const libSearchLower = (_libSearchHadResults ? (state._libSearch || '').trim().toLowerCase() : '');
   const hasRefinementBase = !!(_libServerSearchEmails && pills.length > 1);
   const serverHandledDraft = !hasRefinementBase && !!(libSearchLower && draft && libSearchLower === draft.toLowerCase());
@@ -3870,7 +3806,7 @@ function _renderSearchPills() {
   const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   wrap.innerHTML = pills.map((p, i) => {
     // Filter pills render as icon-only (the icon is the affordance);
-    // contact + text pills carry their label as text.
+    // text pills carry their label as text.
     if (p.type === 'filter') {
       const titleAttr = `${(p.label || p.value).replace(/"/g, '&quot;')}`;
       return `<span class="email-lib-pill email-lib-filter-pill" data-pill-idx="${i}" title="${titleAttr}" style="display:inline-flex;align-items:center;gap:3px;padding:0 5px 0 7px;border-radius:999px;background:color-mix(in srgb, var(--accent, var(--red)) 14%, transparent);color:var(--accent, var(--red));line-height:20px;height:20px;flex-shrink:0;">
@@ -3878,9 +3814,8 @@ function _renderSearchPills() {
         <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="Remove" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:12px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-3px;">×</button>
       </span>`;
     }
-    const label = p.type === 'contact' ? (p.name || p.email || '?') : (p.text || '');
     return `<span class="email-lib-pill" data-pill-idx="${i}" style="display:inline-flex;align-items:center;gap:3px;padding:0 5px 0 7px;border-radius:999px;background:color-mix(in srgb, var(--accent, var(--red)) 14%, transparent);color:var(--accent, var(--red));font-size:11px;line-height:20px;height:20px;font-weight:600;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;">
-      <span style="overflow:hidden;text-overflow:ellipsis;">${esc(label)}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;">${esc(p.text || '')}</span>
       <button type="button" class="email-lib-pill-x" data-pill-idx="${i}" title="Remove" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:12px;line-height:1;padding:0 2px;opacity:0.7;position:relative;top:-3px;">×</button>
     </span>`;
   }).join('');
@@ -3934,12 +3869,8 @@ function _addSearchPill(pill) {
   if (!pill) return;
   _resetBulkSelectionForContextChange({ rerender: true });
   if (!Array.isArray(state._libSearchPills)) state._libSearchPills = [];
-  // Dedup by email (contact), text (text pill), or filter value.
-  if (pill.type === 'contact') {
-    const key = (pill.email || '').toLowerCase();
-    if (!key) return;
-    if (state._libSearchPills.some(p => p.type === 'contact' && (p.email || '').toLowerCase() === key)) return;
-  } else if (pill.type === 'text') {
+  // Dedup by text (text pill) or filter value.
+  if (pill.type === 'text') {
     const t = (pill.text || '').toLowerCase();
     if (!t) return;
     if (state._libSearchPills.some(p => p.type === 'text' && (p.text || '').toLowerCase() === t)) return;
@@ -3960,7 +3891,6 @@ function _searchQueryFromPills() {
   const parts = [];
   for (const p of state._libSearchPills || []) {
     if (p.type === 'text' && p.text) parts.push(String(p.text).trim());
-    else if (p.type === 'contact' && (p.email || p.name)) parts.push(String(p.email || p.name).trim());
   }
   return parts.filter(Boolean).join(' ').trim();
 }
@@ -4080,17 +4010,6 @@ function _acceptSuggestion(s) {
       _toggleCardPreview(card, em);
     }
     return;
-  } else {
-    _addSearchPill({ type: 'contact', name: s.name, email: s.email });
-    // Same as the text-pill path in the Enter handler: trigger the IMAP
-    // search so unloaded emails (older than the current page) show up
-    // when picking a contact. The local pill filter then narrows the
-    // search results to that contact's address.
-    const _q = (s.email || s.name || '').trim();
-    if (_q && _q.length >= 2) {
-      state._libSearch = _q;
-      _doSearch();
-    }
   }
   if (input) input.value = '';
   state._libSearchDraft = '';
@@ -4107,12 +4026,6 @@ async function _initEmailSearchChipBar() {
   state._libSearchDraft = '';
   _renderSearchPills();
 
-  // Lazy-load suggestion source on first focus / keystroke.
-  const _ensureSuggestionCache = async () => {
-    if (_libSuggestionCache) return;
-    _libSuggestionCache = await _buildSuggestionSource();
-  };
-
   // Click anywhere in the bar lands the cursor in the input field.
   bar.addEventListener('click', (e) => {
     if (e.target.closest('.email-lib-pill-x')) return;
@@ -4120,12 +4033,11 @@ async function _initEmailSearchChipBar() {
   });
 
   let _itemsRef = [];
-  const _refreshSuggestions = async () => {
-    await _ensureSuggestionCache();
+  const _refreshSuggestions = () => {
     _itemsRef = _filterSuggestions(input.value);
     // Default to no focused suggestion — text typing should feel like
     // regular search; the user has to ArrowDown / Tab explicitly to
-    // pick a contact. Enter without a focused row commits as text.
+    // pick a suggestion. Enter without a focused row commits as text.
     _libSuggestionFocusIdx = -1;
     _renderSearchSuggestions(_itemsRef);
   };
@@ -4203,9 +4115,8 @@ async function _initEmailSearchChipBar() {
     }
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Only commit a contact if the user explicitly focused one. Plain
-      // Enter should default to a text pill so regular text search works
-      // without forcing a contact pick.
+      // Only commit a focused suggestion. Plain Enter should default to a
+      // text pill so regular text search works without forcing a pick.
       if (menuOpen && _libSuggestionFocusIdx >= 0 && _itemsRef[_libSuggestionFocusIdx]) {
         _acceptSuggestion(_itemsRef[_libSuggestionFocusIdx]);
         return;
@@ -4243,41 +4154,6 @@ async function _initEmailSearchChipBar() {
   });
 }
 
-// Click-to-add: clicking a recipient-chip in the email reader OR a
-// .email-meta-sender in the library list drops the person into the
-// library search as a contact pill so the user can pivot to "everything
-// from / to this person" in one tap.
-window.addEventListener('click', (e) => {
-  const lib = document.getElementById('email-lib-modal');
-  // 1) Recipient chips inside the email reader area
-  const chip = e.target.closest && e.target.closest('.recipient-chip');
-  if (chip && chip.closest('.email-reader-header, .email-card-reader, .email-reader-tab-modal')) {
-    // Don't pivot to library search for chips in the From / To / Cc
-    // meta — clicking those should just toggle the expanded address
-    // view via the per-reader handler.
-    if (chip.closest('.email-reader-meta')) return;
-    const email = (chip.dataset && chip.dataset.email) || '';
-    const name = (chip.dataset && chip.dataset.name) || (chip.textContent || '').trim();
-    if (!email) return;
-    e.preventDefault();
-    e.stopPropagation();
-    try { window.openEmailLibrary && window.openEmailLibrary(); } catch (_) {}
-    _addSearchPill({ type: 'contact', name, email });
-    return;
-  }
-  // 2) Sender name in a library list card row (only when the library is open)
-  if (lib && !lib.classList.contains('hidden')) {
-    const senderEl = e.target.closest && e.target.closest('.email-meta-sender');
-    if (senderEl && senderEl.closest('#email-lib-grid')) {
-      const email = (senderEl.dataset && senderEl.dataset.email) || '';
-      const name = (senderEl.dataset && senderEl.dataset.name) || (senderEl.textContent || '').trim();
-      if (!email) return;
-      e.preventDefault();
-      e.stopPropagation();
-      _addSearchPill({ type: 'contact', name, email });
-    }
-  }
-}, true);
 
 async function _doSearch() {
   _exitEmailReaderModeForList();
@@ -7706,10 +7582,9 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
   };
 
   const _bubblesIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-  const _contactIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>';
   // Three groups separated by dividers:
   //   1. Open / Mark Unread / Remind — the per-email view actions
-  //   2. Save sender / Not Done / Archive — non-destructive state changes
+  //   2. Not Done / Archive — non-destructive state changes
   //   3. Move to Spam / Move to Trash / Delete — destructive
   const actions = [
     {
@@ -7797,36 +7672,6 @@ function _showReaderMoreMenu(em, card, reader, anchor) {
           await fetch(`${API_BASE}/api/email/archive/${em.uid}?folder=${encodeURIComponent(state._libFolder)}${_acct()}`, { method: 'POST' });
         } catch (e) { console.error(e); }
         await closeAndRemove();
-      },
-    },
-    {
-      // Save the sender to CardDAV contacts. Pulls name + address off the
-      // list-item (em); falls back to splitting the local-part for a name.
-      label: 'Save sender to contacts',
-      icon: _contactIcon,
-      action: async () => {
-        const email = (em.from_address || em.from || '').trim();
-        if (!email) {
-          import('./ui.js').then(m => m.showError && m.showError('No sender address')).catch(() => {});
-          return;
-        }
-        const name = (em.from_name || '').trim() || email.split('@')[0];
-        try {
-          const r = await fetch(`${API_BASE}/api/contacts/add`, {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email }),
-          });
-          const d = await r.json();
-          import('./ui.js').then(m => {
-            if (!m.showToast) return;
-            if (d.success && d.message === 'Already exists') m.showToast('Already in contacts');
-            else if (d.success) m.showToast('Saved to contacts');
-            else m.showError && m.showError('Failed to save contact');
-          }).catch(() => {});
-        } catch (_) {
-          import('./ui.js').then(m => m.showError && m.showError('Failed to save contact')).catch(() => {});
-        }
       },
     },
     { separator: true },

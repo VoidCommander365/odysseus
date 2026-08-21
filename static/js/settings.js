@@ -2997,7 +2997,7 @@ async function initEmailSettings() {
     return account ? `?account_id=${encodeURIComponent(account)}` : '';
   };
 
-  // The account/CardDAV config endpoints can be slow when remote mail servers
+  // The account config endpoints can be slow when remote mail servers
   // are cold. Populate the Writing Style box independently so saved prose does
   // not appear seconds after the panel opens.
   try {
@@ -3031,15 +3031,6 @@ async function initEmailSettings() {
     if (el('set-email-from')) el('set-email-from').value = cfg.from_address || '';
   } catch (_) {}
 
-  // Load contacts config
-  try {
-    const res = await fetch('/api/contacts/config');
-    const cfg = await res.json();
-    if (el('set-carddav-url')) el('set-carddav-url').value = cfg.url || '';
-    if (el('set-carddav-user')) el('set-carddav-user').value = cfg.username || '';
-    if (el('set-carddav-pass')) el('set-carddav-pass').value = '';
-  } catch (_) {}
-
   // Save email config
   el('set-email-save')?.addEventListener('click', async () => {
     const msg = el('set-email-msg');
@@ -3059,30 +3050,6 @@ async function initEmailSettings() {
     if (smtpPass) data.smtp_password = smtpPass;
     try {
       const res = await fetch('/api/email/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      const result = await res.json();
-      if (msg) msg.textContent = result.success ? '✓ Saved' : (result.error || 'Failed');
-      setTimeout(() => { if (msg) msg.textContent = ''; }, 3000);
-    } catch (e) {
-      if (msg) msg.textContent = 'Failed';
-    }
-  });
-
-  // Save CardDAV config
-  el('set-carddav-save')?.addEventListener('click', async () => {
-    const msg = el('set-carddav-msg');
-    if (msg) msg.textContent = 'Saving...';
-    const data = {
-      carddav_url: el('set-carddav-url').value,
-      carddav_username: el('set-carddav-user').value,
-    };
-    const pass = el('set-carddav-pass').value;
-    if (pass) data.carddav_password = pass;
-    try {
-      const res = await fetch('/api/contacts/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -3378,8 +3345,6 @@ async function initIntegrations() {
 const INTG_TYPES = {
   api:     { label: 'API',     icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' },
   caldav:  { label: 'CalDAV',  icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' },
-  contacts: { label: 'Contacts', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' },
-  carddav: { label: 'CardDAV', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' },
   email:   { label: 'Email',   icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>' },
   mcp:     { label: 'MCP',     icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' },
   codex:   { label: 'Codex',   icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 10.696.453a6.023 6.023 0 0 0-5.75 4.172 6.061 6.061 0 0 0-3.946 2.945 6.024 6.024 0 0 0 .742 7.099 5.98 5.98 0 0 0 .516 4.911 6.046 6.046 0 0 0 6.51 2.9A5.996 5.996 0 0 0 13.26 23.547a6.023 6.023 0 0 0 5.75-4.172 6.061 6.061 0 0 0 3.946-2.945 6.024 6.024 0 0 0-.674-6.609zM13.26 21.047a4.508 4.508 0 0 1-2.886-1.041l.143-.082 4.793-2.769a.777.777 0 0 0 .391-.676V10.34l2.026 1.17a.072.072 0 0 1 .039.061v5.596a4.532 4.532 0 0 1-4.506 4.48zM3.968 17.64a4.473 4.473 0 0 1-.537-3.018l.143.086 4.793 2.769a.79.79 0 0 0 .782 0l5.852-3.379v2.34a.072.072 0 0 1-.029.062l-4.845 2.796a4.532 4.532 0 0 1-6.159-1.656zM2.804 7.922a4.49 4.49 0 0 1 2.348-1.973V11.6a.778.778 0 0 0 .391.676l5.852 3.378-2.026 1.17a.072.072 0 0 1-.068 0L4.456 14.03a4.532 4.532 0 0 1-1.652-6.108zm16.423 3.823L13.375 8.367l2.026-1.17a.072.072 0 0 1 .068 0l4.845 2.796a4.525 4.525 0 0 1-.7 8.08V12.42a.778.778 0 0 0-.387-.676zm2.015-3.025l-.143-.086-4.793-2.769a.79.79 0 0 0-.782 0L9.672 9.243V6.903a.072.072 0 0 1 .029-.062l4.845-2.796a4.525 4.525 0 0 1 6.696 4.675zM8.598 12.66L6.57 11.49a.072.072 0 0 1-.039-.061V5.833a4.525 4.525 0 0 1 7.413-3.48l-.143.082-4.793 2.769a.777.777 0 0 0-.391.676l-.019 6.78zm1.1-2.379l2.607-1.505 2.607 1.505v3.01l-2.607 1.505-2.607-1.505z"/></svg>' },
@@ -3477,11 +3442,9 @@ async function initUnifiedIntegrations() {
   }
 
   async function fetchAll() {
-    const [apiRes, calRes, cardRes, contactsRes, emailAccountsRes, mcpRes, vaultRes, tokenRes, calendarsRes] = await Promise.all([
+    const [apiRes, calRes, emailAccountsRes, mcpRes, vaultRes, tokenRes, calendarsRes] = await Promise.all([
       fetch('/api/auth/integrations', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { integrations: [] }).catch(() => ({ integrations: [] })),
       fetch('/api/calendar/config/accounts', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { accounts: [] }).catch(() => ({ accounts: [] })),
-      fetch('/api/contacts/config', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
-      fetch('/api/contacts/list', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { contacts: [], count: 0 }).catch(() => ({ contacts: [], count: 0 })),
       fetch('/api/email/accounts', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { accounts: [] }).catch(() => ({ accounts: [] })),
       fetch('/api/mcp/servers', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch('/api/vault/config', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
@@ -3496,28 +3459,6 @@ async function initUnifiedIntegrations() {
     // CalDAV — one card per account
     for (const acc of (calRes.accounts || [])) {
       items.push({ type: 'caldav', id: acc.id, name: acc.label || 'Calendar (CalDAV)', detail: acc.url, enabled: true, data: acc });
-    }
-    // Contacts import first, then the optional CardDAV sync account.
-    const contactCount = Number(contactsRes.count || (contactsRes.contacts || []).length || 0);
-    if (contactCount > 0) {
-      items.push({
-        type: 'contacts',
-        id: '__contacts__',
-        name: 'Contacts Import',
-        detail: `${contactCount} contact${contactCount === 1 ? '' : 's'}`,
-        enabled: true,
-        data: contactsRes,
-      });
-    }
-    if (cardRes.url) {
-      items.push({
-        type: 'carddav',
-        id: '__carddav__',
-        name: 'Contacts (CardDAV)',
-        detail: cardRes.url,
-        enabled: true,
-        data: cardRes,
-      });
     }
     // Email — one entry per EmailAccount row
     for (const acc of (emailAccountsRes.accounts || [])) {
@@ -3611,12 +3552,6 @@ async function initUnifiedIntegrations() {
         try {
           if (type === 'api') await fetch(`/api/auth/integrations/${id}`, { method: 'DELETE', credentials: 'same-origin' });
           else if (type === 'caldav') await fetch(`/api/calendar/config/accounts/${id}`, { method: 'DELETE', credentials: 'same-origin' });
-          else if (type === 'contacts') {
-            await fetch('/api/contacts/clear', { method: 'DELETE', credentials: 'same-origin' });
-          }
-          else if (type === 'carddav') {
-            await fetch('/api/contacts/config', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ carddav_url: '', carddav_username: '', carddav_password: '' }) });
-          }
           else if (type === 'email') await fetch(`/api/email/accounts/${id}`, { method: 'DELETE', credentials: 'same-origin' });
           else if (type === 'mcp') await fetch(`/api/mcp/servers/${id}`, { method: 'DELETE', credentials: 'same-origin' });
           else if (type === 'codex' || type === 'claude') await fetch(`/api/tokens/${id}`, { method: 'DELETE', credentials: 'same-origin' });
@@ -3633,7 +3568,6 @@ async function initUnifiedIntegrations() {
     formEl.style.display = '';
     if (type === 'api') showApiForm(editId);
     else if (type === 'caldav') showCalDavForm(editId);
-    else if (type === 'contacts' || type === 'carddav') showCardDavForm();
     else if (type === 'email') showEmailForm(editId);
     else if (type === 'mcp') showMcpForm(editId);
     else if (type === 'codex') showAgentForm('codex', editId);
@@ -3952,293 +3886,6 @@ async function initUnifiedIntegrations() {
       el('uf-caldav-msg').style.color = '';
       const d = await _runCalDavTest();
       _setCalDavMsg(d.ok ? 'Connected' : (d.error || 'Failed'), d.ok);
-    });
-  }
-
-  // ── CardDAV form + contacts manager ──
-  async function showCardDavForm() {
-    formEl.innerHTML = `
-      <div class="admin-card" style="margin-top:8px">
-        <h2 style="font-size:13px;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent, var(--red));flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Contacts (CardDAV)</h2>
-        <div class="settings-col">
-          <div class="settings-row"><label class="settings-label">URL</label><input id="uf-carddav-url" class="settings-input" placeholder="http://localhost:5232/user/contacts/"></div>
-          <div class="settings-row"><label class="settings-label">Username</label><input id="uf-carddav-user" class="settings-input"></div>
-          <div class="settings-row"><label class="settings-label">Password</label><input id="uf-carddav-pass" class="settings-input" type="password"></div>
-          <div class="settings-row" style="margin-top:10px;align-items:center;justify-content:flex-end;gap:6px;">
-            <span id="uf-carddav-msg" style="font-size:11px;flex:1;margin-right:8px"></span>
-            <button class="admin-btn-add" id="uf-carddav-save" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));font-weight:600;">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-              Save
-            </button>
-            <button class="admin-btn-add" id="uf-carddav-cancel" style="display:inline-flex;align-items:center;gap:5px;background:transparent;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 45%, var(--border));">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="admin-card contacts-manager" style="margin-top:8px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <h2 style="font-size:13px;margin:0;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent, var(--red));flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Contacts Import <span id="cm-count" style="opacity:0.5;font-weight:normal;font-size:11px;"></span></h2>
-          <button class="admin-btn-sm" id="cm-import-btn" style="margin-left:auto;">Import</button>
-          <button class="admin-btn-sm" id="cm-export-vcf-btn">Export .vcf</button>
-          <button class="admin-btn-sm" id="cm-export-csv-btn">Export .csv</button>
-          <button class="admin-btn-sm" id="cm-add-toggle">+ Add</button>
-          <input type="file" id="cm-import-file" accept=".vcf,.csv,text/vcard,text/csv" multiple style="display:none">
-        </div>
-        <div id="cm-add-row" class="contacts-add-row" style="display:none;flex-direction:column;gap:4px;">
-          <input id="cm-add-name" class="settings-input" placeholder="Name">
-          <input id="cm-add-email" class="settings-input" placeholder="email@example.com">
-          <input id="cm-add-phone" class="settings-input" placeholder="Phone (optional)">
-          <input id="cm-add-address" class="settings-input" placeholder="Address (optional)">
-          <div style="display:flex;gap:6px;justify-content:flex-end;"><button class="admin-btn-sm" id="cm-add-save">Save</button></div>
-        </div>
-        <input type="text" id="cm-search" class="settings-input" placeholder="Search contacts (name, email, phone, address)" style="margin-top:6px;">
-        <div id="cm-list" class="contacts-list"><div style="opacity:0.4;font-size:11px;padding:8px 2px;">Loading…</div></div>
-      </div>`;
-    try {
-      const r = await fetch('/api/contacts/config', { credentials: 'same-origin' }); const d = await r.json();
-      el('uf-carddav-url').value = d.url || ''; el('uf-carddav-user').value = d.username || '';
-      // Server masks the password as '***' when one is saved (or '' when
-      // none). Surface that state via the input's placeholder so users
-      // can tell their password is already on file without us echoing it.
-      const passInput = el('uf-carddav-pass');
-      if (passInput && d.password) passInput.placeholder = '(unchanged)';
-    } catch (_) {}
-    el('uf-carddav-cancel').addEventListener('click', () => { formEl.style.display = 'none'; });
-    el('uf-carddav-save').addEventListener('click', async () => {
-      const body = { carddav_url: el('uf-carddav-url').value, carddav_username: el('uf-carddav-user').value };
-      if (el('uf-carddav-pass').value) body.carddav_password = el('uf-carddav-pass').value;
-      try {
-        await fetch('/api/contacts/config', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        el('uf-carddav-msg').textContent = 'Saved';
-        el('uf-carddav-msg').style.color = 'var(--green, #50fa7b)';
-        // Refresh both the sub-panel (contacts manager) AND the
-        // outer integrations list so the CardDAV row appears
-        // immediately instead of waiting for a page reload.
-        await _renderContactsManager();
-        await renderList();
-        notifyIntegrationsChanged();
-      } catch (_) {
-        el('uf-carddav-msg').textContent = 'Failed';
-        el('uf-carddav-msg').style.color = 'var(--red)';
-      }
-    });
-    // Add-row toggle + save
-    el('cm-add-toggle')?.addEventListener('click', () => {
-      const row = el('cm-add-row');
-      const open = row.style.display !== 'none';
-      row.style.display = open ? 'none' : 'flex';
-      if (!open) el('cm-add-name')?.focus();
-    });
-    el('cm-add-save')?.addEventListener('click', async () => {
-      const name = el('cm-add-name').value.trim();
-      const email = el('cm-add-email').value.trim();
-      const phone = el('cm-add-phone')?.value.trim() || '';
-      const address = el('cm-add-address')?.value.trim() || '';
-      // Need at least a name or email; address-only entries without a
-      // name aren't useful as a contact.
-      if (!name && !email) { (name ? el('cm-add-email') : el('cm-add-name')).focus(); return; }
-      try {
-        await fetch('/api/contacts/add', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, phone, address }) });
-      } catch (_) {}
-      el('cm-add-name').value = '';
-      el('cm-add-email').value = '';
-      if (el('cm-add-phone')) el('cm-add-phone').value = '';
-      if (el('cm-add-address')) el('cm-add-address').value = '';
-      el('cm-add-row').style.display = 'none';
-      await _renderContactsManager();
-    });
-    const _downloadContacts = async (format) => {
-      const btn = el(format === 'csv' ? 'cm-export-csv-btn' : 'cm-export-vcf-btn');
-      const orig = btn ? btn.textContent : '';
-      if (btn) { btn.textContent = 'Exporting...'; btn.disabled = true; }
-      try {
-        const res = await fetch(`/api/contacts/export?format=${encodeURIComponent(format)}`, { credentials: 'same-origin' });
-        if (!res.ok) throw new Error('Export failed');
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = format === 'csv' ? 'odysseus-contacts.csv' : 'odysseus-contacts.vcf';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } catch (_) {
-        uiModule.showError ? uiModule.showError('Export failed') : alert('Export failed');
-      } finally {
-        if (btn) { btn.textContent = orig; btn.disabled = false; }
-      }
-    };
-    el('cm-export-vcf-btn')?.addEventListener('click', () => _downloadContacts('vcf'));
-    el('cm-export-csv-btn')?.addEventListener('click', () => _downloadContacts('csv'));
-
-    // Import .vcf/.csv — read each selected file as text, concatenate by type,
-    // then POST. Imported CardDAV contacts immediately feed email autocomplete
-    // because compose searches /api/contacts/search.
-    el('cm-import-btn')?.addEventListener('click', () => el('cm-import-file')?.click());
-    el('cm-import-file')?.addEventListener('change', async (e) => {
-      const files = Array.from(e.target.files || []);
-      if (!files.length) return;
-      const btn = el('cm-import-btn');
-      const orig = btn ? btn.textContent : '';
-      if (btn) { btn.textContent = 'Importing…'; btn.disabled = true; }
-      try {
-        const texts = await Promise.all(files.map(f => f.text()));
-        const vcfParts = [];
-        const csvParts = [];
-        texts.forEach((text, idx) => {
-          const name = (files[idx]?.name || '').toLowerCase();
-          if (name.endsWith('.csv') || !String(text || '').toUpperCase().includes('BEGIN:VCARD')) csvParts.push(text);
-          else vcfParts.push(text);
-        });
-        let imported = 0, total = 0, failed = 0;
-        const _postImport = async (body) => {
-          const r = await fetch('/api/contacts/import', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          });
-          const d = await r.json();
-          if (d.error) throw new Error(d.error);
-          imported += Number(d.imported || 0);
-          total += Number(d.total || 0);
-          failed += Number(d.failed || 0);
-        };
-        if (vcfParts.length) await _postImport({ vcf: vcfParts.join('\n') });
-        if (csvParts.length) await _postImport({ csv: csvParts.join('\n') });
-        if (!vcfParts.length && !csvParts.length) throw new Error('No contact data found');
-        const msg = `Imported ${imported}/${total}` + (failed ? ` (${failed} failed)` : '');
-        uiModule.showToast ? uiModule.showToast(msg) : null;
-      } catch (err) {
-        uiModule.showError ? uiModule.showError(err?.message || 'Import failed') : alert(err?.message || 'Import failed');
-      } finally {
-        if (btn) { btn.textContent = orig; btn.disabled = false; }
-        e.target.value = '';
-        await _renderContactsManager();
-      }
-    });
-    await _renderContactsManager();
-  }
-
-  // Render the contacts list inside the manager card with inline edit +
-  // delete. Each row: name + emails; pencil flips to editable inputs.
-  async function _renderContactsManager() {
-    const list = el('cm-list');
-    if (!list) return;
-    let contacts = [];
-    try {
-      const r = await fetch('/api/contacts/list', { credentials: 'same-origin' });
-      const d = await r.json();
-      contacts = d.contacts || [];
-    } catch (_) {
-      list.innerHTML = '<div style="opacity:0.5;font-size:11px;padding:8px 2px;">Failed to load contacts (check CardDAV config above).</div>';
-      return;
-    }
-    const cnt = el('cm-count');
-    if (cnt) cnt.textContent = contacts.length ? `(${contacts.length})` : '';
-    if (!contacts.length) {
-      list.innerHTML = '<div style="opacity:0.4;font-size:11px;padding:8px 2px;">No contacts yet.</div>';
-      return;
-    }
-    // Sort by name for a stable list.
-    contacts.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-
-    // Live filter — search across name/emails/phones/address.
-    const searchInput = el('cm-search');
-    const q = (searchInput?.value || '').trim().toLowerCase();
-    const filtered = !q ? contacts : contacts.filter(c => {
-      const hay = [
-        c.name || '',
-        (c.emails || []).join(' '),
-        (c.phones || []).join(' '),
-        c.address || '',
-      ].join(' ').toLowerCase();
-      return hay.includes(q);
-    });
-    if (cnt) cnt.textContent = contacts.length ? `(${filtered.length}/${contacts.length})` : '';
-
-    if (!filtered.length) {
-      list.innerHTML = `<div style="opacity:0.4;font-size:11px;padding:8px 2px;">${q ? 'No matches.' : 'No contacts yet.'}</div>`;
-    } else {
-      list.innerHTML = filtered.map(c => {
-        const emails = (c.emails || []).join(', ');
-        const phones = (c.phones || []).join(', ');
-        const address = c.address || '';
-        const sub = [emails, phones, address].filter(Boolean).join(' · ');
-        return `<div class="contact-row" data-uid="${esc(c.uid)}">
-          <div class="contact-row-view" style="display:flex;align-items:center;gap:8px;">
-            <div style="flex:1;min-width:0;">
-              <div class="contact-name" style="font-size:12px;font-weight:600;">${esc(c.name || '(no name)')}</div>
-              <div class="contact-sub" style="font-size:10px;opacity:0.55;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(sub)}</div>
-            </div>
-            <button class="admin-btn-sm contact-edit" title="Edit" style="display:inline-flex;align-items:center;gap:4px;color:var(--accent, var(--red));border-color:color-mix(in srgb, var(--accent, var(--red)) 35%, var(--border));">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-              Edit
-            </button>
-            <button class="admin-btn-sm contact-del" title="Delete" style="opacity:0.85;display:inline-flex;align-items:center;gap:4px;">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              Delete
-            </button>
-          </div>
-          <div class="contact-row-edit" style="display:none;flex-direction:column;gap:4px;">
-            <input class="settings-input contact-edit-name" value="${esc(c.name || '')}" placeholder="Name">
-            <input class="settings-input contact-edit-emails" value="${esc(emails)}" placeholder="email1, email2">
-            <input class="settings-input contact-edit-phones" value="${esc(phones)}" placeholder="phone1, phone2">
-            <input class="settings-input contact-edit-address" value="${esc(address)}" placeholder="Address">
-            <div style="display:flex;gap:6px;"><button class="admin-btn-sm contact-save">Save</button><button class="admin-btn-sm contact-cancel" style="opacity:0.7;">Cancel</button></div>
-          </div>
-        </div>`;
-      }).join('');
-    }
-
-    // Wire the search input — debounced so we don't refetch on every key.
-    if (searchInput && !searchInput._wired) {
-      searchInput._wired = true;
-      let _t;
-      searchInput.addEventListener('input', () => {
-        clearTimeout(_t);
-        _t = setTimeout(() => _renderContactsManager(), 80);
-      });
-    }
-    // Stash latest contacts so the search input doesn't have to refetch.
-    list._lastContacts = contacts;
-    // Wire each row's edit / delete / save / cancel.
-    list.querySelectorAll('.contact-row').forEach(row => {
-      const uid = row.dataset.uid;
-      const view = row.querySelector('.contact-row-view');
-      const editForm = row.querySelector('.contact-row-edit');
-      row.querySelector('.contact-edit')?.addEventListener('click', () => {
-        view.style.display = 'none';
-        editForm.style.display = 'flex';
-      });
-      row.querySelector('.contact-cancel')?.addEventListener('click', () => {
-        editForm.style.display = 'none';
-        view.style.display = 'flex';
-      });
-      row.querySelector('.contact-save')?.addEventListener('click', async () => {
-        const body = {
-          name: row.querySelector('.contact-edit-name').value.trim(),
-          emails: row.querySelector('.contact-edit-emails').value.split(',').map(s => s.trim()).filter(Boolean),
-          phones: row.querySelector('.contact-edit-phones').value.split(',').map(s => s.trim()).filter(Boolean),
-          address: row.querySelector('.contact-edit-address')?.value.trim() || '',
-        };
-        try {
-          await fetch('/api/contacts/' + encodeURIComponent(uid), { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        } catch (_) {}
-        await _renderContactsManager();
-      });
-      row.querySelector('.contact-del')?.addEventListener('click', async () => {
-        const ok = uiModule.styledConfirm
-          ? await uiModule.styledConfirm('Delete this contact?', { confirmText: 'Delete', danger: true })
-          : window.confirm('Delete this contact?');
-        if (!ok) return;
-        try {
-          await fetch('/api/contacts/' + encodeURIComponent(uid), { method: 'DELETE', credentials: 'same-origin' });
-        } catch (_) {}
-        await _renderContactsManager();
-      });
     });
   }
 
@@ -5532,8 +5179,6 @@ async function initUnifiedIntegrations() {
       ['caldav', 'CalDAV Calendar'],
       ['claude', 'Claude Agent'],
       ['codex', 'Codex Agent'],
-      ['carddav', 'Contacts (CardDAV)'],
-      ['contacts', 'Contacts Import'],
       ['email', 'Email (IMAP/SMTP)'],
       ['mcp', 'MCP Tool Server'],
     ];

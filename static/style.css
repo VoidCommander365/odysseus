@@ -25300,27 +25300,6 @@ details.hwfit-serve-advanced > .hwfit-serve-checks:last-of-type {
   outline: none;
   border-color: var(--red);
 }
-/* ── Contacts manager (Settings → Integrations → CardDAV) ── */
-.contacts-add-row {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-  align-items: center;
-}
-.contacts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-.contact-row {
-  padding: 6px 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
-}
-.contact-row:last-child { border-bottom: none; }
-.contact-row-edit { margin-top: 4px; }
-
 /* ── Sort Dropdown ── */
 
 .sort-dropdown {
@@ -33279,21 +33258,6 @@ body.doc-find-active mark.doc-find-mark.current {
   box-shadow: 0 4px 12px rgba(0,0,0,0.2); max-height: 240px; overflow-y: auto;
   margin-top: 2px;
 }
-.contact-suggestion {
-  display: flex; justify-content: space-between; gap: 8px;
-  padding: 6px 10px; font-size: 12px; cursor: pointer;
-  border-bottom: 1px solid var(--border);
-}
-.contact-suggestion:last-child { border-bottom: none; }
-.contact-suggestion:hover,
-.contact-suggestion.active,
-.contact-suggestion[aria-selected="true"] {
-  background: color-mix(in srgb, var(--accent-primary, var(--accent, var(--red))) 15%, transparent);
-  outline: 1px solid color-mix(in srgb, var(--accent-primary, var(--accent, var(--red))) 40%, transparent);
-  outline-offset: -1px;
-}
-.contact-suggestion .contact-name { font-weight: 600; color: var(--fg); }
-.contact-suggestion .contact-email { opacity: 0.6; font-size: 11px; }
 .email-ai-reply-btn {
   background: none;
   color: color-mix(in srgb, var(--fg) 60%, transparent);
