@@ -5297,7 +5297,7 @@ def setup_email_routes():
             if style:
                 system_prompt += f"\n\nWRITING STYLE TO MATCH:\n{style}"
             if context_snippets:
-                system_prompt += "\n\nRELEVANT CONTEXT FROM PAST EMAILS AND CONTACTS:\n" + "\n\n---\n\n".join(context_snippets[:5])
+                system_prompt += "\n\nRELEVANT CONTEXT FROM PAST EMAILS:\n" + "\n\n---\n\n".join(context_snippets[:5])
             if referenced:
                 system_prompt += (
                     "\n\nREFERENCED MATERIAL — the last few emails from this sender, "

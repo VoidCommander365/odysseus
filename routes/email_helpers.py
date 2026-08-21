@@ -1788,7 +1788,7 @@ def _pre_retrieve_context(
     account_id: str | None = None,
     owner: str = "",
 ) -> tuple:
-    """Extract key terms from an incoming email and search past emails + contacts.
+    """Extract key terms from an incoming email and search past emails.
 
     Returns (context_snippets, terms_list). Best-effort; never raises.
 
@@ -1811,35 +1811,8 @@ def _pre_retrieve_context(
         # ── Known-sender check: only retrieve context for senders we already
         # have a relationship with. New / cold senders get an empty context.
         sender_addr = email.utils.parseaddr(sender or "")[1].lower()
-        # The CardDAV address book is global admin data backed by a single
-        # Radicale instance, so only fold it into reply context for an admin /
-        # single-user owner. Non-admin owners still get their own (owner-scoped)
-        # IMAP history below, just not the shared contacts.
-        try:
-            from src.tool_security import owner_is_admin_or_single_user
-            contacts_allowed = owner_is_admin_or_single_user(owner or None)
-        except Exception:
-            contacts_allowed = not bool(owner)
         is_known = False
-        if contacts_allowed:
-            try:
-                from routes.contacts_routes import _fetch_contacts
-                for c in _fetch_contacts() or []:
-                    # Contacts are normalized to plural `emails` lists, but
-                    # keep the legacy singular key fallback for older data.
-                    contact_emails = []
-                    raw_emails = c.get("emails")
-                    if isinstance(raw_emails, list):
-                        contact_emails.extend(str(e or "") for e in raw_emails)
-                    legacy_email = c.get("email")
-                    if legacy_email:
-                        contact_emails.append(str(legacy_email))
-                    if any((addr or "").strip().lower() == sender_addr for addr in contact_emails):
-                        is_known = True
-                        break
-            except Exception:
-                pass
-        if not is_known and sender_addr:
+        if sender_addr:
             try:
                 with _imap(account_id, owner=owner) as _ck:
                     _ck.select("INBOX", readonly=True)
@@ -1922,23 +1895,6 @@ def _pre_retrieve_context(
                 try: ctx_conn.logout()
                 except Exception: pass
 
-        try:
-            from routes.contacts_routes import _fetch_contacts
-            all_contacts = _fetch_contacts() if contacts_allowed else []
-            for term in terms_list:
-                t_lower = term.lower()
-                matches = [c for c in all_contacts
-                           if t_lower in (c.get("name") or "").lower()
-                           or any(t_lower in (e or "").lower() for e in (c.get("emails") or []))]
-                for c in matches[:2]:
-                    parts = [f"Name: {c.get('name','')}"]
-                    if c.get("emails"):
-                        parts.append(f"Email: {', '.join(c['emails'])}")
-                    if c.get("phones"):
-                        parts.append(f"Phone: {', '.join(c['phones'])}")
-                    context_snippets.append(f"[Contact match for \"{term}\"] " + ", ".join(parts))
-        except Exception:
-            pass
     except Exception as e:
         logger.warning(f"Pre-retrieval failed: {e}")
     logger.info(f"Pre-retrieval snippets={len(context_snippets)}")

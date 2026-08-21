@@ -838,7 +838,7 @@ async def _auto_summarize_pass_single(days_back: int = 1, account_id: str | None
                     if writing_style:
                         sys_prompt += f"\n\nWRITING STYLE TO MATCH:\n{writing_style}"
                     if context_snippets:
-                        sys_prompt += "\n\nRELEVANT CONTEXT FROM PAST EMAILS AND CONTACTS:\n" + "\n\n---\n\n".join(context_snippets[:5])
+                        sys_prompt += "\n\nRELEVANT CONTEXT FROM PAST EMAILS:\n" + "\n\n---\n\n".join(context_snippets[:5])
                     try:
                         reply = await task_llm_call_async(
                             messages=[

@@ -552,7 +552,7 @@ async def execute_api_call(
     url = _join_integration_url(base_url, path)
 
     # SSRF guard — same check used by the gallery endpoint, embeddings,
-    # CardDAV, and the reminder webhook sender. Link-local / metadata
+    # and the reminder webhook sender. Link-local / metadata
     # addresses (169.254.x.x — the cloud credential-exfil vector) are always
     # rejected; INTEGRATION_API_BLOCK_PRIVATE_IPS=true also blocks RFC-1918 /
     # loopback for locked-down deployments. Private stays allowed by default
