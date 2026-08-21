@@ -64,7 +64,6 @@ The 28 files classified `area_cli` (verified against `_taxonomy.py`):
 Note: this inventory was refreshed against current `dev` after `tests/test_research_cli_status.py` was added to the `area_cli` set.
 
 - `tests/test_calendar_cli_name.py`
-- `tests/test_contacts_cli_rows.py`
 - `tests/test_cookbook_cli_state.py`
 - `tests/test_docs_cli_content_length.py`
 - `tests/test_gallery_cli_album_count.py`

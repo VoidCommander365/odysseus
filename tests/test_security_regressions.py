@@ -514,8 +514,7 @@ def test_pdf_marker_render_lookup_denies_cross_owner_without_doc_leak(tmp_path):
 def test_require_user_rejects_unauthenticated(monkeypatch):
     """The shared auth dependency must raise 401 when the middleware
     didn't attach a user AND auth is configured. Mirrors the
-    defense-in-depth check on /api/contacts/*, /api/personal/*,
-    /api/email/*."""
+    defense-in-depth check on /api/personal/* and /api/email/*."""
     sys.modules.pop("src.auth_helpers", None)
     from fastapi import HTTPException
 

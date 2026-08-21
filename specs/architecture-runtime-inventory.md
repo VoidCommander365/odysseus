@@ -153,7 +153,7 @@ Routes can be grouped into logical feature domains. Current flat structure obscu
 | **Chat / Agent** | `chat_routes.py`, `chat_helpers.py`, `shell_routes.py`, `codex_routes.py`, `skills_routes.py` | 6,365 | HIGH — core interaction surface |
 | **Cookbook** | `cookbook_routes.py`, `cookbook_helpers.py`, `cookbook_output.py` | 4,110 | MEDIUM |
 | **Model / LLM** | `model_routes.py`, `assistant_routes.py`, `copilot_routes.py` | 2,764 | MEDIUM |
-| **Calendar / Contacts** | `calendar_routes.py`, `contacts_routes.py` | 2,336 | MEDIUM |
+| **Calendar** | `calendar_routes.py` | 1,775 | MEDIUM |
 | **Documents** | `document_routes.py`, `document_helpers.py` | 1,954 | LOW |
 | **Auth** | `auth_routes.py`, `api_token_routes.py`, `device_flow.py` | 1,171 | LOW |
 | **Tasks** | `task_routes.py` (standalone) | 1,157 | LOW |
@@ -182,7 +182,7 @@ Routes can be grouped into logical feature domains. Current flat structure obscu
 
 ### 5.2 Tool Implementation Categories
 
-The 33 `do_*` functions in `tool_implementations.py` fall into natural domain groups — the basis for slice 1's split in §6.2:
+The 31 `do_*` functions in `tool_implementations.py` fall into natural domain groups — the basis for slice 1's split in §6.2:
 
 | Category | `do_*` functions | Count |
 |----------|------------------|-------|
@@ -192,10 +192,9 @@ The 33 `do_*` functions in `tool_implementations.py` fall into natural domain gr
 | **Calendar** | `do_manage_calendar` | 1 |
 | **Search** | `do_search_chats` | 1 |
 | **Research** | `do_manage_research`, `do_trigger_research` | 2 |
-| **Contacts** | `do_resolve_contact`, `do_manage_contact` | 2 |
 | **Vault** | `do_vault_search`, `do_vault_get`, `do_vault_unlock` | 3 |
 | **Image** | `do_edit_image` | 1 |
-| | **Total** | **33** |
+| | **Total** | **31** |
 
 > Low-level tools (filesystem, subprocess, web fetch, document parsing) live in `src/agent_tools/`, **not** in `tool_implementations.py` — out of scope for this split.
 
@@ -356,7 +355,7 @@ codex_routes.py             skills_routes.py
 email_routes.py             email_helpers.py          email_pollers.py
 cookbook_routes.py          cookbook_helpers.py       cookbook_output.py
 model_routes.py             assistant_routes.py       copilot_routes.py
-calendar_routes.py          contacts_routes.py
+calendar_routes.py
 document_routes.py          document_helpers.py
 gallery_routes.py           gallery_helpers.py
 task_routes.py              session_routes.py
