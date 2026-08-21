@@ -29,15 +29,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
   let _animationInProgress = false;
   let _animationCancel = null;      // function to cancel current animation
   let _htmlPreviewActive = false;   // true when inline HTML preview iframe is showing
-  let _emailAccountsCache = null;
-  let _emailAccountsCacheAt = 0;
-  let _emailHeaderManualExpandUntil = 0;
-  let _emailStreamAnimFrame = null;
-  let _emailStreamRenderedBody = '';
-  let _emailStreamTargetBody = '';
-  let _emailLocalDraftDebounce = null;
-  let _emailRichbodySaveDebounce = null;
-  const _EMAIL_LOCAL_DRAFT_PREFIX = 'odysseus.email.replyDraft.v1:';
 
   // Diff mode state
   let _diffModeActive = false;
@@ -81,35 +72,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
     ].includes(lang) || _isRenderLang(lang);
   };
 
-  async function _getEmailAccountsCached() {
-    const now = Date.now();
-    if (_emailAccountsCache && (now - _emailAccountsCacheAt) < 30000) return _emailAccountsCache;
-    try {
-      const res = await fetch(`${API_BASE}/api/email/accounts`, { credentials: 'same-origin' });
-      if (!res.ok) throw new Error('accounts failed');
-      const data = await res.json();
-      _emailAccountsCache = Array.isArray(data.accounts) ? data.accounts : [];
-    } catch (_) {
-      _emailAccountsCache = [];
-    }
-    _emailAccountsCacheAt = now;
-    return _emailAccountsCache;
-  }
-
-  function _accountCanSend(account) {
-    if (!account || !account.smtp_host || !account.smtp_user) return false;
-    return !!(account.has_smtp_password || account.oauth_provider);
-  }
-
-  async function _resolveComposeSendAccountId() {
-    const activeAccountId = window.__odysseusActiveEmailAccount || null;
-    if (!activeAccountId) return null;
-    const accounts = await _getEmailAccountsCached();
-    const activeAccount = accounts.find(a => String(a.id) === String(activeAccountId));
-    if (!activeAccount || _accountCanSend(activeAccount)) return activeAccountId;
-    if (uiModule) uiModule.showToast('Selected email account is receive-only; using your SMTP account.');
-    return null;
-  }
 
   // Inject tab menu styles immediately (must exist before any hover)
   {
@@ -123,8 +85,6 @@ import { bindMenuDismiss, dismissOrRemove } from './escMenuStack.js';
   let activeDocId = null;           // currently visible doc
   let _lastSessionId = '';          // session context for "+" button
   const docs = new Map();           // docId -> { id, title, language, content, version, sessionId }
-  let _emailSendInFlight = false;
-
   const _docOpenKey = (sessionId) => 'odysseus-doc-open-' + sessionId;
   const _docMinimizedKey = (sessionId) => 'odysseus-doc-minimized-' + sessionId;
 
