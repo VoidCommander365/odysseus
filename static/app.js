@@ -30,7 +30,6 @@ import censorModule from './js/censor.js';
 import galleryModule from './js/gallery.js';
 import { UI_VIS_DEFAULT_OFF, resolveVisibility } from './js/ui_visibility.js';
 import tasksModule from './js/tasks.js?v=20260723tasksbulkfeedback1';
-import calendarModule from './js/calendar.js';
 import notesModule from './js/notes.js';
 import adminModule from './js/admin.js?v=20260716openrouter3';
 import settingsModule from './js/settings.js?v=20260815approvalsave1';
@@ -168,11 +167,9 @@ function initRailHoverLabels() {
     'rail-delete-session': 'Delete',
     'rail-chats': 'Chat',
     'rail-documents': 'Docs',
-    'rail-calendar': 'Calendar',
     'rail-compare': 'Compare',
     'rail-cookbook': 'Cookbook',
     'rail-research': 'Research',
-    'rail-email': 'Email',
     'rail-gallery': 'Gallery',
     'rail-archive': 'Library',
     'rail-memory': 'Brain',
@@ -1069,21 +1066,6 @@ function initializeEventListeners() {
     });
   }
 
-  // Calendar tool button
-  const toolCalendarBtn = el('tool-calendar-btn');
-  if (toolCalendarBtn) {
-    toolCalendarBtn.addEventListener('click', async () => {
-      if (!calendarModule) return;
-      const Modals = await import('./js/modalManager.js');
-      // toggle returns true when a registered modal was minimized/restored;
-      // returns false when nothing is registered → open fresh.
-      if (!Modals.toggle('calendar-modal')) {
-        if (calendarModule.isCalendarOpen()) calendarModule.closeCalendar();
-        else calendarModule.openCalendar();
-      }
-    });
-  }
-
   // Notes tool button
   const toolNotesBtn = el('tool-notes-btn');
   if (toolNotesBtn) {
@@ -1099,7 +1081,7 @@ function initializeEventListeners() {
     setInterval(() => notesModule.refreshDueBadge(), 5 * 60 * 1000);
   }
 
-  // URL-based panel routing — bookmark /calendar, /notes, /cookbook etc
+  // URL-based panel routing — bookmark /notes, /cookbook etc
   // and the matching tool opens automatically on page load.
   const urlPath = window.location.pathname;
   // Current width of the always-visible icon rail. The rail is resizable
@@ -1114,8 +1096,8 @@ function initializeEventListeners() {
   };
   // Collapse the wide sidebar so the icon rail (48px mini sidebar) shows
   // in its place. The two are mutually exclusive — sidebar-layout.js:57
-  // only displays the rail when `.sidebar.hidden` is set. Used by /email
-  // and /notes route openers so those fullscreen views keep the rail
+  // only displays the rail when `.sidebar.hidden` is set. Used by the
+  // /notes route opener so that fullscreen view keeps the rail
   // visible as the user's navigation strip. Records the prior state on
   // body so a paired close-handler can restore it without overriding a
   // manual toggle the user did in between.
@@ -1183,41 +1165,7 @@ function initializeEventListeners() {
         setTimeout(_go, 200);
       }
     },
-    '/calendar': () => calendarModule && calendarModule.openCalendar(),
     '/cookbook': () => document.getElementById('tool-cookbook-btn')?.click(),
-    '/email':    () => {
-      // Collapse the wide sidebar → icon rail (48px) so the user keeps
-      // navigation visible alongside the fullscreen email view.
-      _collapseSidebarToRail();
-      // Spawn a fresh chat first so a reply (or any AI work the user
-      // chains off the email) lives in its own session instead of grafting
-      // onto whatever was last open. The rail button has the full
-      // default-chat / fallback-model resolution logic baked in, so just
-      // delegate to it.
-      try { document.getElementById('rail-new-session')?.click(); } catch (_) {}
-      // The email library is opened by clicking the email section's HEADER
-      // row (.section-header-flex), not the title span. Trigger that, then
-      // snap the modal to fullscreen on the next frame.
-      const hdr = document.querySelector('#email-section .section-header-flex');
-      if (hdr) hdr.click();
-      // The modal is built synchronously inside openEmailLibrary, so a
-      // single frame later it's in the DOM and ready to be flagged.
-      // Fullscreen leaves the icon-rail visible on the left so navigation
-      // stays one click away (per #93). Width = viewport minus rail.
-      // Just add the class — the CSS rule for .email-lib-fullscreen .modal-content
-      // owns all the positioning (with !important so it beats openEmailLibrary's
-      // post-mount centering rAF) and reads the rail width from --icon-rail-w.
-      const _goFullscreen = () => {
-        const modal = document.getElementById('email-lib-modal');
-        if (!modal) return false;
-        modal.classList.add('email-lib-fullscreen');
-        return true;
-      };
-      _goFullscreen();
-      requestAnimationFrame(_goFullscreen);
-      setTimeout(_goFullscreen, 50);
-      setTimeout(_goFullscreen, 200);
-    },
     '/memory':   () => document.getElementById('tool-memory-btn')?.click(),
     '/gallery':  () => document.getElementById('tool-gallery-btn')?.click(),
     '/tasks':    () => document.getElementById('tool-tasks-btn')?.click(),
@@ -1225,8 +1173,8 @@ function initializeEventListeners() {
   };
   const _opener = _routeOpen[urlPath];
   // Defer the opener — at this point in init, the modules whose handlers we
-  // trigger (#rail-new-session click handler, the email-section header click
-  // handler in emailInbox, sessionModule) are still being wired up further
+  // trigger (#rail-new-session click handler, sessionModule) are still
+  // being wired up further
   // down in this same function. startupShell decides when it can run: as soon
   // as wiring completes, or — for the routes that read the session list —
   // once /api/sessions has settled.
@@ -3744,11 +3692,9 @@ function startOdysseusApp() {
     'rail-archive':   'tool-library-btn',
     'rail-gallery':   'tool-gallery-btn',
     'rail-tasks':     'tool-tasks-btn',
-    'rail-calendar':  'tool-calendar-btn',
     'rail-notes':     'tool-notes-btn',
     'rail-memory':    'tool-memory-btn',
     'rail-theme':     'tool-theme-btn',
-    'rail-email':     'email-section-title',
   };
   Object.entries(_railToolMap).forEach(([railId, toolId]) => {
     const railBtn = el(railId);
@@ -3808,7 +3754,7 @@ function startOdysseusApp() {
   }
 
   // Sync the contextual rail icons. Tool launchers (calendar/compare/cookbook/
-  // research/gallery/tasks/archive/memory/notes/theme/email) are now
+  // research/gallery/tasks/archive/memory/notes/theme) are now
   // always-visible launchers, so only the doc + background-chat indicators
   // are shown/hidden dynamically here.
   function _syncRailDynamic() {

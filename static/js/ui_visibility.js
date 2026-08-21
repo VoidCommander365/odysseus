@@ -15,10 +15,8 @@ export const UI_VIS_MAP = {
   'sidebar-new-chat':    '#sidebar-new-chat-btn',
   'sidebar-search':      '#sidebar-search-btn',
   'sessions-section':   '#sessions-section',
-  'email-section':       '#email-section, #rail-email',
   'tools-section':       '#tools-section',
   // Per-tool entries pair the sidebar button with its rail launcher.
-  'tool-calendar':       '#tool-calendar-btn, #rail-calendar',
   'tool-compare':        '#tool-compare-btn, #rail-compare',
   'tool-cookbook':       '#tool-cookbook-btn, #rail-cookbook',
   'tool-research':       '#tool-research-btn, #rail-research',

@@ -1389,16 +1389,6 @@ document.addEventListener('click', function(e) {
       const open = mod.openGalleryImage || (mod.default && mod.default.openGalleryImage);
       if (open) open(id);
     }).catch(() => {});
-  } else if (kind === 'email') {
-    import('./emailLibrary.js?v=20260815approvalsave1').then(mod => {
-      const open = mod.openEmailLibrary || (mod.default && mod.default.openEmailLibrary);
-      if (open) open({ uid: id });
-    }).catch(() => {});
-  } else if (kind === 'event') {
-    import('./calendar.js').then(mod => {
-      const open = mod.openCalendarTo || (mod.default && mod.default.openCalendarTo);
-      if (open) open(id);
-    }).catch(() => {});
   } else if (kind === 'task') {
     import('./tasks.js').then(mod => {
       const open = mod.openTasks || (mod.default && mod.default.openTasks);

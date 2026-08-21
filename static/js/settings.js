@@ -2201,8 +2201,6 @@ function initAll() {
   initShortcuts();
   initAccount();
   initIntegrations();
-  initEmailSettings();
-  initEmailAccountsSettings();
   initReminderSettings();
   initUnifiedIntegrations();
 }
@@ -2269,29 +2267,14 @@ async function initReminderSettings() {
   }
   if (!channelSel || !llmToggle) return;
 
-  // Detect configured email accounts. The legacy single-account
-  // `/api/email/config` endpoint was a no-op stub for most installs;
-  // the real per-account list lives at `/api/email/accounts` and is
-  // what the Integrations panel manages. Treat the email channel as
-  // configured if there's at least one account with SMTP set.
+  // The email reminder channel is being removed — no account probing here;
+  // the channel is permanently treated as unconfigured.
   let emailAccounts = [];
-  const smtpAccountReady = (account) => !!(
-    account.smtp_host
-    && account.smtp_user
-    && (account.has_smtp_password || account.oauth_provider === 'google')
-  );
-  try {
-    const res = await fetch('/api/email/accounts', { credentials: 'same-origin' });
-    if (res.ok) {
-      const d = await res.json();
-      emailAccounts = (d.accounts || []).filter(smtpAccountReady);
-    }
-  } catch (_) {}
-  let smtpConfigured = emailAccounts.length > 0;
+  let smtpConfigured = false;
 
-  if (!smtpConfigured && emailOpt) {
+  if (emailOpt) {
     emailOpt.disabled = true;
-    emailOpt.textContent = 'Email (add an account in Integrations)';
+    emailOpt.textContent = 'Email (unavailable)';
   }
 
   // Detect whether ntfy integration exists — try admin endpoint, fall back to
@@ -2384,15 +2367,6 @@ async function initReminderSettings() {
     const currentChannel = channelSel.value || 'browser';
     const currentEmailAccount = emailAcctSel?.value || '';
     const currentWebhookIntg = webhookIntgSel?.value || '';
-    try {
-      const res = await fetch('/api/email/accounts', { credentials: 'same-origin' });
-      if (res.ok) {
-        const d = await res.json();
-        emailAccounts = (d.accounts || []).filter(smtpAccountReady);
-      }
-    } catch (_) {}
-    smtpConfigured = emailAccounts.length > 0;
-
     ntfyConfigured = false;
     try {
       const res = await fetch('/api/auth/integrations', { credentials: 'same-origin' });
@@ -3444,12 +3418,12 @@ async function initUnifiedIntegrations() {
   async function fetchAll() {
     const [apiRes, calRes, emailAccountsRes, mcpRes, vaultRes, tokenRes, calendarsRes] = await Promise.all([
       fetch('/api/auth/integrations', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { integrations: [] }).catch(() => ({ integrations: [] })),
-      fetch('/api/calendar/config/accounts', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { accounts: [] }).catch(() => ({ accounts: [] })),
-      fetch('/api/email/accounts', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { accounts: [] }).catch(() => ({ accounts: [] })),
+      Promise.resolve({ accounts: [] }),
+      Promise.resolve({ accounts: [] }),
       fetch('/api/mcp/servers', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => []),
       fetch('/api/vault/config', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}).catch(() => ({})),
       fetch('/api/tokens', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []).catch(() => []),
-      fetch('/api/calendar/calendars', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : { calendars: [] }).catch(() => ({ calendars: [] })),
+      Promise.resolve({ calendars: [] }),
     ]);
     const items = [];
     // API integrations

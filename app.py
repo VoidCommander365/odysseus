@@ -884,20 +884,12 @@ async def serve_index(request: Request):
 async def serve_notes(request: Request):
     return await serve_index(request)
 
-@app.get("/calendar")
-async def serve_calendar(request: Request):
-    return await serve_index(request)
-
 # Per-tool deep-link routes — all serve the same SPA, the JS auto-opens
 # the matching modal based on window.location.pathname. Each route also
 # gets a unique favicon + page title via inline script in index.html so
 # bookmarks render with tool-specific icons.
 @app.get("/cookbook")
 async def serve_cookbook(request: Request):
-    return await serve_index(request)
-
-@app.get("/email")
-async def serve_email(request: Request):
     return await serve_index(request)
 
 @app.get("/memory")
