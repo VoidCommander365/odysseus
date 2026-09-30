@@ -1,15 +1,10 @@
 # services/research/service.py
 """Research service — deep research with LLM-in-the-loop."""
 
-import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Callable
 
-from .research_handler import ResearchHandler
-
-# Markdown source links emitted by ResearchHandler._format_research_report,
-# e.g. "- [Some Title](https://example.com/page)".
-_SOURCE_LINK_RE = re.compile(r"^\s*-\s*\[(?P<title>[^\]]*)\]\((?P<url>[^)]+)\)\s*$")
+from src.research_handler import ResearchHandler
 
 
 @dataclass
@@ -70,12 +65,17 @@ class ResearchService:
         import time
         start = time.time()
 
+        # Local task entry so call_research_service can store the
+        # DeepResearcher instance (and raw report/stats) on it.
+        task_entry: dict = {}
+
         result = await self.handler.call_research_service(
             topic,
             llm_endpoint,
             llm_model,
             max_time=max_time,
             progress_callback=on_progress,
+            _task_entry=task_entry,
         )
 
         duration = time.time() - start
@@ -104,46 +104,27 @@ class ResearchService:
             )
 
         report = result if isinstance(result, str) else ""
+
+        # Sources come from the DeepResearcher's findings via the canonical
+        # extractor (same path as ResearchHandler.get_sources), not from
+        # markdown parsing — the formatted report no longer embeds a
+        # "### Sources" section.
+        sources: List[ResearchSource] = []
+        researcher = task_entry.get("researcher")
+        if researcher is not None and getattr(researcher, "findings", None):
+            for s in ResearchHandler._extract_sources(researcher.findings):
+                # _extract_sources yields {url, title, image?}; the canonical
+                # extractor does not expose snippets, so default to empty.
+                sources.append(
+                    ResearchSource(url=s.get("url", ""), title=s.get("title", ""), snippet="")
+                )
+
         return ResearchResult(
             query=topic,
             summary=report,
-            sources=self._parse_sources(report),
+            sources=sources,
             duration_seconds=duration,
         )
-
-    @staticmethod
-    def _parse_sources(report: str) -> List[ResearchSource]:
-        """Extract sources from the markdown ### Sources section of a report.
-
-        ResearchHandler emits one ``- [title](url)`` link per deduplicated
-        finding under a ``### Sources`` heading. Parse only that section so
-        inline links elsewhere in the body are not mistaken for sources.
-        """
-        if not report:
-            return []
-        sources: List[ResearchSource] = []
-        seen = set()
-        in_sources = False
-        for line in report.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("###") or stripped.startswith("##"):
-                in_sources = stripped.lower().lstrip("#").strip() == "sources"
-                continue
-            if not in_sources:
-                continue
-            match = _SOURCE_LINK_RE.match(line)
-            if not match:
-                continue
-            url = match.group("url").strip()
-            if not url or url in seen:
-                continue
-            seen.add(url)
-            sources.append(
-                # snippet is required on ResearchSource; markdown source links
-                # carry no snippet, so default to empty (matches the dict path).
-                ResearchSource(url=url, title=match.group("title").strip(), snippet="")
-            )
-        return sources
 
     def start_background(
         self,
